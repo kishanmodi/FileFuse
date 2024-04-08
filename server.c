@@ -11,70 +11,6 @@
 #define MAX_CONNECTIONS 5
 #define MAX_COMMAND_LENGTH 1000
 
-int execute_command(const char *command)
-{
-    // Array to store command and its arguments
-    char *args[MAX_COMMAND_LENGTH];
-    int arg_count = 0;
-    char *token = strtok((char *)command, " ");
-
-    // Parsing command string into tokens
-    while (token != NULL && arg_count < MAX_COMMAND_LENGTH - 1)
-    {
-        args[arg_count++] = token;
-        token = strtok(NULL, " ");
-    }
-
-    args[arg_count] = NULL; // Null-terminating the argument array
-
-    // Executing the command using execvp
-    if (execvp(args[0], args) == -1)
-    {
-        printf("Error executing command: %s\n", command);
-        return 0; // Return 0 on failure
-    }
-
-    return 1; // Return 1 on success
-}
-
-// Function to fork a process and execute a command
-int fork_and_execute_command(const char *command, int new_socket) {
-    pid_t pid;
-
-    pid = fork();
-
-    if (pid == -1)
-    {
-        // Error handling for fork failure
-        perror("fork");
-        return 0; // Return 0 on failure
-    }
-
-    if (pid == 0)
-    {
-        // Child process: execute the command
-        dup2(new_socket, 1); // Redirect stdout to the socket
-
-        execute_command(command);
-
-        exit(EXIT_SUCCESS);
-    }
-    else
-    {
-        // Parent process: wait for child to finish
-        int status;
-        waitpid(pid, &status, 0);
-        if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
-        {
-            return 1; // Return 1 on successful execution
-        }
-        else
-        {
-            return 0; // Return 0 on failure
-        }
-    }
-}
-
 void connection_handler(int new_socket)
 {
     char client_code[1024] = {0};
@@ -90,7 +26,8 @@ void connection_handler(int new_socket)
             break;
         }
 
-        fork_and_execute_command(client_code, new_socket);
+        char message[] = "This can be any Resposnse from server\n";
+        write(new_socket, message, strlen(message));
     }
 
     // Close the socket for this client
