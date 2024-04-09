@@ -1,0 +1,9 @@
+// DEFAULT SYNTAX FOR DEFINED COMMANDS
+// 1 dirlist -a -- Return All File Under Home Directory of Server --- Alphabetic Order
+// 2 dirlist -t -- Return All File Under Home Directory of Server --- Time Order
+// 3 w24fn <filename> -- Return File Name size (bytes), date of creation, file permissions
+// 4 w24fz <size1> <size2> -- Return All Files with size between size1 and size2 in tar.gz format
+// 5 w24ft <file_extension1> <file_extension2> <file_extension3> -- upto 3 file extensions, min 1 --> return all files with the given extensions in tar.gz format
+// 6 w24db <date> -- Return all files created before the given date in tar.gz format
+// 7 w24da <date> -- Return all files created after the given date in tar.gz format
+// 8 quitc -- Close the connection with the server
