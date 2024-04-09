@@ -12,7 +12,7 @@
 #include <time.h>
 #include <pthread.h>
 
-#define SERVER_PORT 8080
+#define SERVER_PORT 8081
 #define MIRROR_1_PORT 9001
 #define MIRROR_2_PORT 10001
 #define MAX_CONNECTIONS 5
@@ -164,6 +164,8 @@ void connection_handler(int new_socket)
     {
         // Read the command from the client
         read(new_socket, client_code, MAX_COMMAND_LENGTH);
+
+        printf("Received command: %s from socket: %d\n", client_code, new_socket);
 
         int token_count = 0;
         char **command_tokens = tokenizer(client_code, &token_count);
