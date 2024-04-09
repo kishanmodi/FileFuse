@@ -1,10 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-
-#define MAX_COMMAND_LENGTH 1024
-
 // DEFAULT SYNTAX FOR DEFINED COMMANDS
 // 1 dirlist -a -- Return All File Under Home Directory of Server --- Alphabetic Order
 // 2 dirlist -t -- Return All File Under Home Directory of Server --- Time Order
@@ -15,115 +8,229 @@
 // 7 w24da <date> -- Return all files created after the given date in tar.gz format
 // 8 quitc -- Close the connection with the server
 
-// Function to tokenize the command and return the tokens in an array
-char *tokenize(char *command) {
-    char *command_tokens[5];
-    char *copy_of_command = strdup(command);
-    char *token = strtok(copy_of_command, " ");
-    int tokenCount = 0;
-    while (token != NULL) {
-        // Format the token
-        // Remove trailing space, tab , newline characters
-        while (token[strlen(token) - 1] == ' ' || token[strlen(token) - 1] == '\t' || token[strlen(token) - 1] == '\n') {
-            token[strlen(token) - 1] = '\0';
-        }
-        // Remove leading space, tab , newline characters
-        while (token[0] == ' ' || token[0] == '\t' || token[0] == '\n') {
-            token++;
-        }
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
 
-        // Store the token in the array
-        command_tokens[tokenCount] = token;
-        token = strtok(NULL, " ");
-        tokenCount++;
+#define MAX_COMMAND_LENGTH 1024
+#define MAX_TOKEN_COUNT 10
+#define MAX_RESPONSE_LENGTH 102400
+#define IP_LENGTH INET_ADDRSTRLEN
+
+// Error Messages
+#define INVALID_IP_ERROR "Error: Invalid IP Address\n"
+#define INVALID_PORT_ERROR "Error: Invalid Port Number\n"
+#define ALLOCATION_ERROR "Error allocating memory\n"
+#define INVALID_ARGUMENTS_ERROR "Error: Invalid number of arguments for %s\n"
+#define INVALID_COMMAND_ERROR "Error: Invalid command\n"
+
+int socket_fd, port;
+char ip[IP_LENGTH];
+
+int establish_connection();
+void close_connection();
+int validate_ip_port();
+char **tokenizer(char *command, int *token_count);
+int verify_command_syntax(char **command_tokens, int tokenCount);
+
+// Function to establish connection with server using socket
+int establish_connection() {
+    // Create socket
+    socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (socket_fd < 0) {
+        fprintf(stderr, "Error creating socket\n");
+        return 0;
     }
-    command_tokens[tokenCount] = NULL;
+
+    // Define server address
+    struct sockaddr_in server_addr;
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
+    server_addr.sin_addr.s_addr = inet_addr(ip);
+
+    // Connect to server
+    if (connect(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        fprintf(stderr, "Error connecting to server\n");
+        return 0;
+    }
+    return 1;
+}
+
+// Function to close connection with server
+void close_connection() {
+    close(socket_fd);
+}
+
+// Function to validate IP address and port number
+int validate_ip_port() {
+    // Validate IP Address
+    if (inet_addr(ip) == -1) {
+        fprintf(stderr, INVALID_IP_ERROR);
+        return 0;
+    }
+    // Validate Port Number
+    if (port < 1024 || port > 65535) {
+        fprintf(stderr, INVALID_PORT_ERROR);
+        return 0;
+    }
+    return 1;
+}
+
+// Function to tokenize the command and return the tokens in an array
+char **tokenizer(char *command, int *token_count) {
+    char **command_tokens = (char **)malloc((MAX_TOKEN_COUNT + 1) * sizeof(char *));
+    if (command_tokens == NULL) {
+        // Handle allocation failure
+        fprintf(stderr, ALLOCATION_ERROR);
+        return NULL;
+    }
+
+    char *token = strtok(command, " ");
+    *token_count = 0;
+    while (token != NULL && *token_count < MAX_TOKEN_COUNT) {
+        command_tokens[*token_count] = strdup(token);
+        if (command_tokens[*token_count] == NULL) {
+            // Handle allocation failure
+            fprintf(stderr, ALLOCATION_ERROR);
+            for (int i = 0; i < *token_count; i++) {
+                free(command_tokens[i]);
+            }
+            free(command_tokens);
+            return NULL;
+        }
+        (*token_count)++;
+        token = strtok(NULL, " ");
+    }
+    command_tokens[*token_count] = NULL;
     return command_tokens;
 }
 
 // Function to verify the syntax of the command
-int verify_command_syntax(char *command) {
-    // Check if the command is empty
-    if (strcmp(command, "") == 0) {
-        fprintf(stderr, "Error:  Empty command\n");
-        return 0;
-    }
-
-    // Tokenize the command and store the tokens in an array
-    char *command_tokens = tokenize(command);
-
-    // Count the number of tokens in the command
-    int tokenCount = 0;
-    while (command_tokens[tokenCount] != NULL) {
-        tokenCount++;
-    }
-
+int verify_command_syntax(char **command_tokens, int tokenCount) {
     // Check if the command is valid
     if (strcmp(command_tokens[0], "dirlist") == 0) {
         if (tokenCount != 2) {
-            fprintf(stderr, "Error: Invalid number of arguments for dirlist\n");
+            fprintf(stderr, INVALID_ARGUMENTS_ERROR, "dirlist");
             return 0;
         }
         if (strcmp(command_tokens[1], "-a") != 0 && strcmp(command_tokens[1], "-t") != 0) {
-            fprintf(stderr, "Error: Invalid argument for dirlist\n");
+            fprintf(stderr, INVALID_ARGUMENTS_ERROR, "dirlist");
             return 0;
         }
     } else if (strcmp(command_tokens[0], "w24fn") == 0) {
         if (tokenCount != 2) {
-            fprintf(stderr, "Error:  Invalid number of arguments for w24fn\n");
+            fprintf(stderr, INVALID_ARGUMENTS_ERROR, "w24fn");
             return 0;
         }
     } else if (strcmp(command_tokens[0], "w24fz") == 0) {
         if (tokenCount != 3) {
-            fprintf(stderr, "Error:  Invalid number of arguments for w24fz\n");
+            fprintf(stderr, INVALID_ARGUMENTS_ERROR, "w24fz");
             return 0;
         }
     } else if (strcmp(command_tokens[0], "w24ft") == 0) {
         if (tokenCount < 3 || tokenCount > 5) {
-            fprintf(stderr, "Error:  Invalid number of arguments for w24ft\n");
+            fprintf(stderr, INVALID_ARGUMENTS_ERROR, "w24ft");
             return 0;
         }
     } else if (strcmp(command_tokens[0], "w24db") == 0) {
         if (tokenCount != 2) {
-            fprintf(stderr, "Error:  Invalid number of arguments for w24db\n");
+            fprintf(stderr, INVALID_ARGUMENTS_ERROR, "w24db");
             return 0;
         }
     } else if (strcmp(command_tokens[0], "w24da") == 0) {
         if (tokenCount != 2) {
-            fprintf(stderr, "Error:  Invalid number of arguments for w24da\n");
+            fprintf(stderr, INVALID_ARGUMENTS_ERROR, "w24da");
             return 0;
         }
     } else if (strcmp(command_tokens[0], "quitc") == 0) {
         if (tokenCount != 1) {
-            fprintf(stderr, "Error:  Invalid number of arguments for quitc\n");
+            fprintf(stderr, INVALID_ARGUMENTS_ERROR, "quitc");
             return 0;
         }
     } else {
-        fprintf(stderr, "Error:  Invalid command\n");
-        return 0;  // Command is invalid
+        fprintf(stderr, INVALID_COMMAND_ERROR);
+        return 0; // Command is invalid
     }
 
-    return 1;  // Command is valid
+    return 1; // Command is valid
 }
 
 int main() {
+    printf("Enter the IP Address of the Server: ");
+    scanf("%s", ip); // Use scanf to get IP address
+    printf("Enter the Port Number of the Server: ");
+    scanf("%d", &port); // Use scanf to get port number
+
+    // Validate IP Address and Port Number
+    if (validate_ip_port() == 0) {
+        return 0;
+    }
+
+    // Establish Connection with Server
+    if (establish_connection() == 0) {
+        return 0;
+    }
+
     char input[MAX_COMMAND_LENGTH];
 
+    while(getchar() != '\n'); // Clear the input buffer
+
     while (1) {
-        printf("shell24$ ");
-        fgets(input, MAX_COMMAND_LENGTH, stdin);  // Read input from the user
-        input[strlen(input) - 1] = '\0';          // Remove the newline character from the input
+        printf("Enter Command: ");
+        fgets(input, MAX_COMMAND_LENGTH, stdin);      // Read input from the user
+        input[strlen(input) - 1] = '\0';  // Remove the newline character from the input
 
         if (strcmp(input, "") == 0) {  // Handle empty input line, Enter key
             continue;
         }
 
-        if (verify_command_syntax(input) == 0) {  // Verify the syntax of the command
+        // Tokenize the Command
+        int token_count = 0;
+        char **command_tokens = tokenizer(input, &token_count);
+
+        // Verify the Syntax of the Command
+        if (verify_command_syntax(command_tokens, token_count) == 0) {
             continue;
         }
 
-        // Tokenize the command and store the tokens in an array
-        char *command_tokens = tokenize(input);
+        if (strcmp(command_tokens[0], "quitc") == 0) {
+            break;
+        }
+
+        char *command = (char *) malloc(strlen(command_tokens[0]) * sizeof(char) + 1);
+        strcpy(command, command_tokens[0]);
+        for (int i = 1; i < token_count; i++) {
+            command = (char *) realloc(command, strlen(command) + strlen(command_tokens[i]) + 2);
+            strcat(command, " ");
+            strcat(command, command_tokens[i]);
+        }
+
+        // Send Command to Server
+        write(socket_fd, command, strlen(command) + 1);
+
+        printf("Waiting for response from server...\n");
+
+        // Receive Response from Server
+        char response[MAX_RESPONSE_LENGTH];
+        read(socket_fd, response, MAX_RESPONSE_LENGTH);
+        printf("%s\n", response);
+
+        int i = 0;
+        while (command_tokens[i] != NULL) {
+            free(command_tokens[i]);
+            i++;
+        }
+        free(command);
     }
-    exit(1);
+
+    // Close Connection with Server
+    close_connection();
+    return 0;
 }
+
