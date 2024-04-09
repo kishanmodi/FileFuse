@@ -12,7 +12,7 @@
 #include <time.h>
 #include <pthread.h>
 
-#define SERVER_PORT 8081
+#define SERVER_PORT 8080
 #define MIRROR_1_PORT 9001
 #define MIRROR_2_PORT 10001
 #define MAX_CONNECTIONS 5
@@ -101,7 +101,7 @@ int compare_directories_by_name(const void *a, const void *b)
 {
     const struct DirectoryInfo *dir1 = (const struct DirectoryInfo *)a;
     const struct DirectoryInfo *dir2 = (const struct DirectoryInfo *)b;
-    return strcmp(dir1->name, dir2->name);
+    return strcasecmp(dir1->name, dir2->name);
 }
 
 int compare_directories_by_creation_time(const void *a, const void *b)
