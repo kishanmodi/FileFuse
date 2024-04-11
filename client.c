@@ -19,7 +19,7 @@
 
 #define MAX_COMMAND_LENGTH 1024
 #define MAX_TOKEN_COUNT 10
-#define MAX_RESPONSE_LENGTH 102400
+#define RESPONSE_CHUNK 1024
 #define IP_LENGTH INET_ADDRSTRLEN
 
 // Error Messages
@@ -28,6 +28,8 @@
 #define ALLOCATION_ERROR "Error allocating memory\n"
 #define INVALID_ARGUMENTS_ERROR "Error: Invalid number of arguments for %s\n"
 #define INVALID_COMMAND_ERROR "Error: Invalid command\n"
+#define COMPLETE_MESSAGE "@#COMPLETE#@"
+#define FILE_NOT_FOUND "File not found"
 
 int socket_fd, port;
 char ip[IP_LENGTH];
@@ -194,15 +196,17 @@ int verify_command_syntax(char **command_tokens, int tokenCount)
         return 0; // Command is invalid
     }
 
-    return 1; // Command is valid
+    return 1;
 }
 
+// Main function
 int main(int argc, char *argv[])
 {
     strcpy(ip, "127.0.0.1");
     port = 8080;
 
-    if (argc > 1) {
+    if (argc > 1)
+    {
         port = atoi(argv[1]);
     }
 
@@ -227,7 +231,7 @@ int main(int argc, char *argv[])
         input[strlen(input) - 1] = '\0';         // Remove the newline character from the input
 
         if (strcmp(input, "") == 0)
-        { // Handle empty input line, Enter key
+        {
             continue;
         }
 
@@ -256,25 +260,92 @@ int main(int argc, char *argv[])
         }
 
         // Send Command to Server
-        write(socket_fd, command, strlen(command) + 1);
+        send(socket_fd, command, strlen(command) + 1, 0);
 
         printf("Waiting for response from server...\n");
 
-        // Receive Response from Server
-        char response[MAX_RESPONSE_LENGTH];
-        read(socket_fd, response, MAX_RESPONSE_LENGTH);
-        printf("%s\n", response);
+        char response[RESPONSE_CHUNK] = {0};
+
+        int bytes_received;
+
+        if (strcmp(command_tokens[0], "dirlist") == 0)
+        {
+            if (strcmp(command_tokens[1], "-a") == 0)
+            {
+                while (1)
+                {
+                    bytes_received = recv(socket_fd, response, RESPONSE_CHUNK, 0);
+                    if (strcmp(response, COMPLETE_MESSAGE) == 0)
+                        break;
+                    printf("%s", response);
+                }
+            }
+            else if (strcmp(command_tokens[1], "-t") == 0)
+            {
+                while (1)
+                {
+                    bytes_received = recv(socket_fd, response, RESPONSE_CHUNK, 0);
+                    if (strcmp(response, COMPLETE_MESSAGE) == 0)
+                        break;
+                    printf("%s", response);
+                }
+            }
+        }
+        else
+        {
+            remove("temp.tar.gz");
+            FILE *fp = fopen("temp.tar.gz", "wb");
+
+            if (fp == NULL)
+            {
+                perror("fopen");
+                exit(EXIT_FAILURE);
+            }
+
+            int flag = 0;
+
+            size_t bytes_received;
+            while ((bytes_received = recv(socket_fd, response, RESPONSE_CHUNK-1, 0)) > 0)
+            {
+                response[bytes_received] = '\0';
+                if (strcmp(response, FILE_NOT_FOUND) == 0)
+                {
+                    printf("File not found.\n");
+                    break;
+                }
+                if (strcmp(response, COMPLETE_MESSAGE) == 0)
+                {
+                    break;
+                }
+                printf("Received %ld bytes\n", bytes_received);
+                fwrite(response, 1, bytes_received, fp);
+                flag = 1;
+            }
+
+            fclose(fp);
+
+            if(flag == 1)
+            {
+                printf("File received successfully.\n");
+            }
+            else
+            {
+                remove("temp.tar.gz");
+            }
+        }
 
         int i = 0;
+
         while (command_tokens[i] != NULL)
         {
             free(command_tokens[i]);
             i++;
         }
+
         free(command);
+        free(command_tokens);
     }
 
-    // Close Connection with Server
     close_connection();
     return 0;
 }
