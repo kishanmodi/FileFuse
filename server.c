@@ -22,7 +22,7 @@
 #define MAX_TOKEN_COUNT     10
 #define MAX_PATH_LEN        1024
 #define MAX_DIRS            1000
-#define MAX_RESPONSE_LENGTH 10240
+#define MAX_RESPONSE_LENGTH 1024
 
 // Error Messages
 #define INVALID_IP_ERROR        "Error: Invalid IP Address\n"
@@ -36,6 +36,8 @@
 // * Temporary Directory Path for Tar Files
 char *tempDirPath = "/var/tmp/a4TarTempDir";
 
+char *mainDir = NULL;
+char *DesktopDir = NULL;
 // Directory Information Structure
 struct DirectoryInfo {
     char name[1024];
@@ -354,6 +356,7 @@ char *escapeSpaces(const char *input) {
 // Function to create a tar file and send it in chunks
 int create_tar_and_send(int new_socket) {
     // Create dir with timestamp in /var/tmp/a4TarTempDir
+    int total = 0;
     time_t t = time(NULL);
     struct tm tm = *localtime(&t);
     char tempTarDirName[1024];
@@ -390,13 +393,15 @@ int create_tar_and_send(int new_socket) {
         send(new_socket, buffer, bytesRead, 0);
         memset(buffer, 0, sizeof(buffer));
         printf("Bytes Sent: %ld\n", bytesRead);
+        total += bytesRead;
     }
     fclose(tarFile);
+    printf("%d\n", total);
 
     // Delete Temp Tar File Created and Temp Directory for that tar
-    char deleteCommand[1024];
-    sprintf(deleteCommand, "rm -rf %s %s", tempDirFullPath, tarFilePath);
-    system(deleteCommand);
+    // char deleteCommand[1024];
+    // sprintf(deleteCommand, "rm -rf %s %s", tempDirFullPath, tarFilePath);
+    // system(deleteCommand);
 
     return 1;
 }
@@ -456,7 +461,7 @@ void crequest(int new_socket) {
 
                 int num_directories = 0;
 
-                traverse_dir_info(directories, &num_directories, "/home/modi97/Desktop");
+                traverse_dir_info(directories, &num_directories, DesktopDir);
 
                 if (strcmp(command_tokens[1], "-a") == 0) {
                     sort_directories(directories, num_directories, "name");
@@ -481,6 +486,8 @@ void crequest(int new_socket) {
                 }
                 free_dir_info(directories);
             }
+            int finalBytes = send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
+            printf("Final Bytes Sent: %d\n", finalBytes);
         } else if (strcmp(command_tokens[0], "w24fn") == 0) {
             if (token_count != 2) {
                 sprintf(message, INVALID_ARGUMENTS_ERROR, command_tokens[0]);
@@ -491,7 +498,7 @@ void crequest(int new_socket) {
             fileNameToSearch = command_tokens[1];
             single_file_search = 1;
 
-            nftw("/home/modi97/Desktop", Traverse_Files_Recursively, 20, FTW_PHYS);
+            nftw(DesktopDir, Traverse_Files_Recursively, 20, FTW_PHYS);
 
             // Single File Search
             if (file_count == 0) {
@@ -502,11 +509,14 @@ void crequest(int new_socket) {
                 // Send File Details
                 for (int i = 0; i < file_count; i++) {
                     memset(message, 0, MAX_RESPONSE_LENGTH);
-                    snprintf(message, sizeof(message), "File Name: %s\nFile Path: %s\nFile Size: %ld\nFile Permissions: %s\n",
+                    snprintf(message, sizeof(message), "----------------------------------------------------\nFile Name: %s\nFile Path: %s\nFile Size: %ld\nFile Permissions: %s\n----------------------------------------------------\n",
                              file_list[i]->name, file_list[i]->file_path, file_list[i]->size, file_list[i]->file_permissions);
                     send(new_socket, message, strlen(message), 0);
                     memset(message, 0, MAX_RESPONSE_LENGTH);
                 }
+
+                int finalBytes = send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
+                printf("Final Bytes Sent: %d\n", finalBytes);
             }
         } else if (strcmp(command_tokens[0], "w24fz") == 0) {
             if (token_count != 3) {
@@ -519,7 +529,7 @@ void crequest(int new_socket) {
             upper_bound_size = atoi(command_tokens[2]);
             search_by_size = 1;
 
-            nftw("/home/modi97/Desktop", Traverse_Files_Recursively, 20, FTW_PHYS);
+            nftw(DesktopDir, Traverse_Files_Recursively, 20, FTW_PHYS);
 
             if (file_count == 0) {
                 sprintf(message, FILE_NOT_FOUND_ERROR);
@@ -530,8 +540,9 @@ void crequest(int new_socket) {
             } else {
                 // Create Tar File and Send
                 int ret = create_tar_and_send(new_socket);
-
                 if (ret) {
+                    int finalBytes = send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
+                    printf("Final Bytes Sent: %d\n", finalBytes);
                     printf("Tar File Created and Sent\n");
                 } else {
                     printf("Error Creating Tar File\n");
@@ -545,10 +556,14 @@ void crequest(int new_socket) {
                 continue;
             }
             for (int i = 1; i < token_count; i++) {
-                file_extensions[i - 1] = command_tokens[i];
+                char *tempExtension = (char *)malloc((strlen(command_tokens[i]) * sizeof(char)) + 1);
+                strcpy(tempExtension, ".");
+                strcat(tempExtension, command_tokens[i]);
+
+                file_extensions[i - 1] = tempExtension;
             }
             search_by_extension = 1;
-            nftw("/home/modi97/Desktop", Traverse_Files_Recursively, 20, FTW_PHYS);
+            nftw(DesktopDir, Traverse_Files_Recursively, 20, FTW_PHYS);
 
             // Send Tar File
             if (file_count == 0) {
@@ -560,6 +575,8 @@ void crequest(int new_socket) {
                 int ret = create_tar_and_send(new_socket);
 
                 if (ret) {
+                    int finalBytes = send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
+                    printf("Final Bytes Sent: %d\n", finalBytes);
                     printf("Tar File Created and Sent\n");
                 } else {
                     printf("Error Creating Tar File\n");
@@ -576,7 +593,7 @@ void crequest(int new_socket) {
             provided_date = convertToTimeT(command_tokens[1]);
             search_by_date_before = 1;
 
-            nftw("/home/modi97/Desktop", Traverse_Files_Recursively, 20, FTW_PHYS);
+            nftw(DesktopDir, Traverse_Files_Recursively, 20, FTW_PHYS);
 
             // Send Tar File
             if (file_count == 0) {
@@ -588,6 +605,8 @@ void crequest(int new_socket) {
                 int ret = create_tar_and_send(new_socket);
 
                 if (ret) {
+                    int finalBytes = send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
+                    printf("Final Bytes Sent: %d\n", finalBytes);
                     printf("Tar File Created and Sent\n");
                 } else {
                     printf("Error Creating Tar File\n");
@@ -603,7 +622,7 @@ void crequest(int new_socket) {
             provided_date = convertToTimeT(command_tokens[1]);
             search_by_date_after = 1;
 
-            nftw("/home/modi97/Desktop", Traverse_Files_Recursively, 20, FTW_PHYS);
+            nftw(DesktopDir, Traverse_Files_Recursively, 20, FTW_PHYS);
 
             // Send Tar File
             if (file_count == 0) {
@@ -627,8 +646,6 @@ void crequest(int new_socket) {
             send(new_socket, message, strlen(message), 0);
             memset(message, 0, MAX_RESPONSE_LENGTH);
         }
-        int finalBytes = send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
-        printf("Final Bytes Sent: %d\n", finalBytes);
         free(command_tokens);
         reset_global_variables();
     }
@@ -639,6 +656,9 @@ void crequest(int new_socket) {
 
 // Main Function
 int main() {
+    mainDir = getenv("HOME");
+    DesktopDir = getenv("HOME");
+    strcat(DesktopDir, "/Desktop");
     int server_fd, new_socket;
     struct sockaddr_in address;
     int addrlen = sizeof(address);
@@ -672,7 +692,7 @@ int main() {
     printf("%d\n", SERVER_PORT);
 
     // Changing directory to ~
-    if (chdir("/home/modi97") != 0) {
+    if (chdir(mainDir) != 0) {
         perror("chdir");
         exit(EXIT_FAILURE);
     }
