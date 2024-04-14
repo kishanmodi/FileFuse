@@ -1,44 +1,48 @@
-#define _XOPEN_SOURCE 500 // For FTW_PHYS
+#define _XOPEN_SOURCE 500
+#include <arpa/inet.h>
+#include <dirent.h>
+#include <fcntl.h>
+#include <ftw.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/wait.h>
 #include <string.h>
 #include <strings.h>
-#include <unistd.h>
-#include <ftw.h>
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <dirent.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <time.h>
-#include <pthread.h>
+#include <unistd.h>
 
-#define SERVER_PORT 8081
-#define MIRROR_1_PORT 9001
-#define MIRROR_2_PORT 10001
-#define MAX_CONNECTIONS 5
-#define MAX_COMMAND_LENGTH 1024
-#define MAX_TOKEN_COUNT 10
-#define MAX_PATH_LEN 1024
-#define MAX_DIRS 1000
+// Constants for the server
+#define SERVER_PORT         8081
+#define MIRROR_1_PORT       9001
+#define MIRROR_2_PORT       10001
+#define MAX_CONNECTIONS     5
+#define MAX_COMMAND_LENGTH  1024
+#define MAX_TOKEN_COUNT     10
+#define MAX_PATH_LEN        1024
+#define MAX_DIRS            1000
 #define MAX_RESPONSE_LENGTH 10240
 
-// * Temporary Directory Path for TarKdm
-char* tempDirPath = "/var/tmp/a4TarTempDir";
-
-#define INVALID_IP_ERROR "Error: Invalid IP Address\n"
-#define INVALID_PORT_ERROR "Error: Invalid Port Number\n"
-#define ALLOCATION_ERROR "Error allocating memory\n"
+// Error Messages
+#define INVALID_IP_ERROR        "Error: Invalid IP Address\n"
+#define INVALID_PORT_ERROR      "Error: Invalid Port Number\n"
+#define ALLOCATION_ERROR        "Error allocating memory\n"
 #define INVALID_ARGUMENTS_ERROR "Error: Invalid number of arguments for %s\n"
-#define INVALID_COMMAND_ERROR "Error: Invalid command\n"
-#define COMPLETE_MESSAGE "@#COMPLETE#@"
-#define FILE_NOT_FOUND_ERROR "File not found"
+#define INVALID_COMMAND_ERROR   "Error: Invalid command\n"
+#define COMPLETE_MESSAGE        "@#COMPLETE#@"
+#define FILE_NOT_FOUND_ERROR    "File not found"
 
+// * Temporary Directory Path for Tar Files
+char *tempDirPath = "/var/tmp/a4TarTempDir";
+
+// Directory Information Structure
 struct DirectoryInfo {
     char name[1024];
     time_t creation_time;
 };
 
+// File Information Structure
 struct FileInfo {
     char name[1024];
     time_t creation_time;
@@ -70,6 +74,20 @@ int search_by_date_before = 0;
 int search_by_date_after = 0;
 time_t provided_date = 0;
 
+// Function Prototypes
+void reset_global_variables();
+time_t convertToTimeT(const char *date);
+void traverse_dir_info(struct DirectoryInfo *directories, int *num_directories, const char *dir_name);
+void free_dir_info(struct DirectoryInfo *directories);
+void free_file_info(struct FileInfo *files);
+int compare_directories_by_name(const void *a, const void *b);
+int compare_directories_by_creation_time(const void *a, const void *b);
+void sort_directories(struct DirectoryInfo *directories, int num_directories, const char *sort_key);
+int Traverse_Files_Recursively(const char *filePath, const struct stat *fileStats, int typeFlag, struct FTW *fileDirInfo);
+char *escapeSpaces(const char *input);
+int create_tar_and_send(int new_socket);
+char **tokenizer(char *command, int *token_count);
+void crequest(int new_socket);
 
 // Function to reset all the global variables
 void reset_global_variables() {
@@ -97,10 +115,10 @@ void reset_global_variables() {
 time_t convertToTimeT(const char *date) {
     struct tm time_info = {0};
     strptime(date, "%Y-%m-%d", &time_info);
-    time_info.tm_hour = 0; // Set hours to 0
-    time_info.tm_min = 0;  // Set minutes to 0
-    time_info.tm_sec = 0;  // Set seconds to 0
-    time_info.tm_isdst = -1; // Determine whether Daylight Saving Time is in effect
+    time_info.tm_hour = 0;    // Set hours to 0
+    time_info.tm_min = 0;     // Set minutes to 0
+    time_info.tm_sec = 0;     // Set seconds to 0
+    time_info.tm_isdst = -1;  // Determine whether Daylight Saving Time is in effect
     return mktime(&time_info);
 }
 
@@ -128,11 +146,11 @@ void traverse_dir_info(struct DirectoryInfo *directories, int *num_directories, 
         }
 
         if (S_ISDIR(file_info.st_mode)) {
-            if (*num_directories < 100) { // Ensure array bounds are not exceeded
+            if (*num_directories < 100) {  // Ensure array bounds are not exceeded
                 strncpy(directories[*num_directories].name, entry->d_name, sizeof(directories[*num_directories].name));
                 directories[*num_directories].creation_time = file_info.st_ctime;
                 (*num_directories)++;
-                traverse_dir_info(directories, num_directories, path); // Recursive call
+                traverse_dir_info(directories, num_directories, path);  // Recursive call
             } else {
                 fprintf(stderr, "Maximum number of directories exceeded.\n");
                 break;
@@ -143,26 +161,31 @@ void traverse_dir_info(struct DirectoryInfo *directories, int *num_directories, 
     closedir(dir);
 }
 
+// Function to free the memory allocated for directory information
 void free_dir_info(struct DirectoryInfo *directories) {
     free(directories);
 }
 
+// Function to free the memory allocated for file information
 void free_file_info(struct FileInfo *files) {
     free(files);
 }
 
+// Function to compare directories by name
 int compare_directories_by_name(const void *a, const void *b) {
     const struct DirectoryInfo *dir1 = (const struct DirectoryInfo *)a;
     const struct DirectoryInfo *dir2 = (const struct DirectoryInfo *)b;
     return strcasecmp(dir1->name, dir2->name);
 }
 
+// Function to compare directories by creation time
 int compare_directories_by_creation_time(const void *a, const void *b) {
     const struct DirectoryInfo *dir1 = (const struct DirectoryInfo *)a;
     const struct DirectoryInfo *dir2 = (const struct DirectoryInfo *)b;
     return difftime(dir1->creation_time, dir2->creation_time);
 }
 
+// Function to sort directories based on the sort key
 void sort_directories(struct DirectoryInfo *directories, int num_directories, const char *sort_key) {
     if (strcmp(sort_key, "name") == 0) {
         qsort(directories, num_directories, sizeof(struct DirectoryInfo), compare_directories_by_name);
@@ -171,6 +194,7 @@ void sort_directories(struct DirectoryInfo *directories, int num_directories, co
     }
 }
 
+// Function to traverse files recursively using nftw
 int Traverse_Files_Recursively(const char *filePath, const struct stat *fileStats, int typeFlag, struct FTW *fileDirInfo) {
     if (typeFlag != FTW_F) {
         return 0;
@@ -204,15 +228,15 @@ int Traverse_Files_Recursively(const char *filePath, const struct stat *fileStat
                      (fileStats->st_mode & S_IXOTH) ? "x" : "-");
             file_list[file_count] = file_data;
             file_count++;
-            return 1; // Stop NFTW Process as file is found
+            return 1;  // Stop NFTW Process as file is found
         }
     }
 
     if (search_by_size) {
         // If File name starts with . then skip
-            if (current_file_name[0] == '.') {
-                return 0;
-            }
+        if (current_file_name[0] == '.') {
+            return 0;
+        }
         if (fileStats->st_size >= lower_bound_size && fileStats->st_size <= upper_bound_size) {
             struct FileInfo *file_data = (struct FileInfo *)malloc(sizeof(struct FileInfo));
             if (file_data == NULL) {
@@ -233,9 +257,9 @@ int Traverse_Files_Recursively(const char *filePath, const struct stat *fileStat
 
     if (search_by_extension) {
         // If File name starts with . then skip
-            if (current_file_name[0] == '.') {
-                return 0;
-            }
+        if (current_file_name[0] == '.') {
+            return 0;
+        }
         for (int i = 0; i < 3; i++) {
             if (file_extensions[i] != NULL) {
                 if (strcasecmp(file_extensions[i], current_file_name + strlen(current_file_name) - strlen(file_extensions[i])) == 0) {
@@ -304,12 +328,13 @@ int Traverse_Files_Recursively(const char *filePath, const struct stat *fileStat
         }
     }
 
-    return 0; // No matching criteria found
+    return 0;  // No matching criteria found
 }
 
-char* escapeSpaces(const char* input) {
+// Function to escape spaces in the input string
+char *escapeSpaces(const char *input) {
     size_t len = strlen(input);
-    char* result = (char*)malloc((2 * len + 1) * sizeof(char)); // Maximum length is 2 times the input length
+    char *result = (char *)malloc((2 * len + 1) * sizeof(char));  // Maximum length is 2 times the input length
     if (result == NULL) {
         fprintf(stderr, "Memory allocation failed\n");
         exit(EXIT_FAILURE);
@@ -318,16 +343,16 @@ char* escapeSpaces(const char* input) {
     size_t j = 0;
     for (size_t i = 0; i < len; i++) {
         if (input[i] == ' ') {
-            result[j++] = '\\'; // escape space with backslash
+            result[j++] = '\\';  // escape space with backslash
         }
         result[j++] = input[i];
     }
-    result[j] = '\0'; // null-terminate the string
+    result[j] = '\0';  // null-terminate the string
     return result;
 }
 
-
-int create_tar_and_send(int new_socket){
+// Function to create a tar file and send it in chunks
+int create_tar_and_send(int new_socket) {
     // Create dir with timestamp in /var/tmp/a4TarTempDir
     time_t t = time(NULL);
     struct tm tm = *localtime(&t);
@@ -363,6 +388,7 @@ int create_tar_and_send(int new_socket){
     size_t bytesRead;
     while ((bytesRead = fread(buffer, 1, sizeof(buffer), tarFile)) > 0) {
         send(new_socket, buffer, bytesRead, 0);
+        memset(buffer, 0, sizeof(buffer));
         printf("Bytes Sent: %ld\n", bytesRead);
     }
     fclose(tarFile);
@@ -375,6 +401,7 @@ int create_tar_and_send(int new_socket){
     return 1;
 }
 
+// Function to tokenize the command
 char **tokenizer(char *command, int *token_count) {
     char **command_tokens = (char **)malloc((MAX_TOKEN_COUNT + 1) * sizeof(char *));
     if (command_tokens == NULL) {
@@ -403,19 +430,19 @@ char **tokenizer(char *command, int *token_count) {
     return command_tokens;
 }
 
+// Function to handle client requests
 void crequest(int new_socket) {
     // Buffer to store the command received from the client
     char client_code[1024] = {0};
 
     while (1) {
         // Read the command from the client
-
         // CReate Temp Directory
         int mkdirReturn = system("mkdir -p /var/tmp/a4TarTempDir");
         if (mkdirReturn != 0) {
             perror("Error Creating Temp Directory");
         }
-        recv(new_socket, client_code, MAX_COMMAND_LENGTH,0);
+        recv(new_socket, client_code, MAX_COMMAND_LENGTH, 0);
 
         printf("Received command: %s from socket: %d\n", client_code, new_socket);
 
@@ -437,7 +464,8 @@ void crequest(int new_socket) {
                         memset(message, 0, MAX_RESPONSE_LENGTH);
                         strcpy(message, directories[i].name);
                         strcat(message, "\n");
-                        int bytesSent = send(new_socket, message, MAX_RESPONSE_LENGTH,0);
+                        int bytesSent = send(new_socket, message, MAX_RESPONSE_LENGTH, 0);
+                        memset(message, 0, MAX_RESPONSE_LENGTH);
                         printf("Bytes Sent: %d\n", bytesSent);
                     }
                 }
@@ -447,15 +475,17 @@ void crequest(int new_socket) {
                         memset(message, 0, MAX_RESPONSE_LENGTH);
                         strcpy(message, directories[i].name);
                         strcat(message, "\n");
-                        send(new_socket, message, MAX_RESPONSE_LENGTH,0);
+                        send(new_socket, message, MAX_RESPONSE_LENGTH, 0);
+                        memset(message, 0, MAX_RESPONSE_LENGTH);
                     }
                 }
                 free_dir_info(directories);
             }
         } else if (strcmp(command_tokens[0], "w24fn") == 0) {
-            if(token_count != 2) {
+            if (token_count != 2) {
                 sprintf(message, INVALID_ARGUMENTS_ERROR, command_tokens[0]);
-                send(new_socket, message, strlen(message),0);
+                send(new_socket, message, strlen(message), 0);
+                memset(message, 0, MAX_RESPONSE_LENGTH);
                 continue;
             }
             fileNameToSearch = command_tokens[1];
@@ -466,20 +496,23 @@ void crequest(int new_socket) {
             // Single File Search
             if (file_count == 0) {
                 sprintf(message, FILE_NOT_FOUND_ERROR);
-                send(new_socket, message, strlen(message),0);
+                send(new_socket, message, strlen(message), 0);
+                memset(message, 0, MAX_RESPONSE_LENGTH);
             } else {
                 // Send File Details
                 for (int i = 0; i < file_count; i++) {
                     memset(message, 0, MAX_RESPONSE_LENGTH);
                     snprintf(message, sizeof(message), "File Name: %s\nFile Path: %s\nFile Size: %ld\nFile Permissions: %s\n",
                              file_list[i]->name, file_list[i]->file_path, file_list[i]->size, file_list[i]->file_permissions);
-                    send(new_socket, message, strlen(message),0);
+                    send(new_socket, message, strlen(message), 0);
+                    memset(message, 0, MAX_RESPONSE_LENGTH);
                 }
             }
         } else if (strcmp(command_tokens[0], "w24fz") == 0) {
-            if(token_count != 3) {
+            if (token_count != 3) {
                 sprintf(message, INVALID_ARGUMENTS_ERROR, command_tokens[0]);
-                send(new_socket, message, strlen(message),0);
+                send(new_socket, message, strlen(message), 0);
+                memset(message, 0, MAX_RESPONSE_LENGTH);
                 continue;
             }
             lower_bound_size = atoi(command_tokens[1]);
@@ -490,24 +523,25 @@ void crequest(int new_socket) {
 
             if (file_count == 0) {
                 sprintf(message, FILE_NOT_FOUND_ERROR);
-                int bytesSent = send(new_socket, message, strlen(message),0);
+                int bytesSent = send(new_socket, message, strlen(message), 0);
                 printf("Bytes Sent: %d\n", bytesSent);
                 printf("Message: %s\n", message);
+                memset(message, 0, MAX_RESPONSE_LENGTH);
             } else {
                 // Create Tar File and Send
                 int ret = create_tar_and_send(new_socket);
 
-                if(ret){
+                if (ret) {
                     printf("Tar File Created and Sent\n");
-                }
-                else{
+                } else {
                     printf("Error Creating Tar File\n");
                 }
             }
         } else if (strcmp(command_tokens[0], "w24ft") == 0) {
-            if(token_count < 2 || token_count > 4) {
+            if (token_count < 2 || token_count > 4) {
                 sprintf(message, INVALID_ARGUMENTS_ERROR, command_tokens[0]);
-                send(new_socket, message, strlen(message),0);
+                send(new_socket, message, strlen(message), 0);
+                memset(message, 0, MAX_RESPONSE_LENGTH);
                 continue;
             }
             for (int i = 1; i < token_count; i++) {
@@ -519,23 +553,24 @@ void crequest(int new_socket) {
             // Send Tar File
             if (file_count == 0) {
                 sprintf(message, FILE_NOT_FOUND_ERROR);
-                send(new_socket, message, strlen(message),0);
+                send(new_socket, message, strlen(message), 0);
+                memset(message, 0, MAX_RESPONSE_LENGTH);
             } else {
                 // Create Tar File and Send
                 int ret = create_tar_and_send(new_socket);
 
-                if(ret){
+                if (ret) {
                     printf("Tar File Created and Sent\n");
-                }
-                else{
+                } else {
                     printf("Error Creating Tar File\n");
                 }
             }
 
         } else if (strcmp(command_tokens[0], "w24db") == 0) {
-            if(token_count != 2) {
+            if (token_count != 2) {
                 sprintf(message, INVALID_ARGUMENTS_ERROR, command_tokens[0]);
-                send(new_socket, message, strlen(message),0);
+                send(new_socket, message, strlen(message), 0);
+                memset(message, 0, MAX_RESPONSE_LENGTH);
                 continue;
             }
             provided_date = convertToTimeT(command_tokens[1]);
@@ -546,22 +581,23 @@ void crequest(int new_socket) {
             // Send Tar File
             if (file_count == 0) {
                 sprintf(message, FILE_NOT_FOUND_ERROR);
-                send(new_socket, message, strlen(message),0);
+                send(new_socket, message, strlen(message), 0);
+                memset(message, 0, MAX_RESPONSE_LENGTH);
             } else {
                 // Create Tar File and Send
                 int ret = create_tar_and_send(new_socket);
 
-                if(ret){
+                if (ret) {
                     printf("Tar File Created and Sent\n");
-                }
-                else{
+                } else {
                     printf("Error Creating Tar File\n");
                 }
             }
         } else if (strcmp(command_tokens[0], "w24da") == 0) {
-            if(token_count != 2) {
+            if (token_count != 2) {
                 sprintf(message, INVALID_ARGUMENTS_ERROR, command_tokens[0]);
-                send(new_socket, message, strlen(message),0);
+                send(new_socket, message, strlen(message), 0);
+                memset(message, 0, MAX_RESPONSE_LENGTH);
                 continue;
             }
             provided_date = convertToTimeT(command_tokens[1]);
@@ -572,15 +608,15 @@ void crequest(int new_socket) {
             // Send Tar File
             if (file_count == 0) {
                 sprintf(message, FILE_NOT_FOUND_ERROR);
-                send(new_socket, message, strlen(message),0);
+                send(new_socket, message, strlen(message), 0);
+                memset(message, 0, MAX_RESPONSE_LENGTH);
             } else {
                 // Create Tar File and Send
                 int ret = create_tar_and_send(new_socket);
 
-                if(ret){
+                if (ret) {
                     printf("Tar File Created and Sent\n");
-                }
-                else{
+                } else {
                     printf("Error Creating Tar File\n");
                 }
             }
@@ -588,9 +624,10 @@ void crequest(int new_socket) {
             break;
         } else {
             sprintf(message, INVALID_COMMAND_ERROR);
-            send(new_socket, message, strlen(message),0);
+            send(new_socket, message, strlen(message), 0);
+            memset(message, 0, MAX_RESPONSE_LENGTH);
         }
-        int finalBytes = send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE),0);
+        int finalBytes = send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
         printf("Final Bytes Sent: %d\n", finalBytes);
         free(command_tokens);
         reset_global_variables();
@@ -600,6 +637,7 @@ void crequest(int new_socket) {
     close(new_socket);
 }
 
+// Main Function
 int main() {
     int server_fd, new_socket;
     struct sockaddr_in address;
