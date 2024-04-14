@@ -160,7 +160,7 @@ int verify_command_syntax(char **command_tokens, int tokenCount)
     }
     else if (strcmp(command_tokens[0], "w24ft") == 0)
     {
-        if (tokenCount > 4 || tokenCount < 2)
+        if (tokenCount < 3 || tokenCount > 5)
         {
             fprintf(stderr, INVALID_ARGUMENTS_ERROR, "w24ft");
             return 0;
@@ -305,37 +305,21 @@ int main(int argc, char *argv[])
             int flag = 0;
 
             size_t bytes_received;
-            while ((bytes_received = recv(socket_fd, response, RESPONSE_CHUNK, 0)) > 0)
+            while ((bytes_received = recv(socket_fd, response, RESPONSE_CHUNK-1, 0)) > 0)
             {
-                printf("Received %ld bytes\n", bytes_received);
-
-
+                response[bytes_received] = '\0';
                 if (strcmp(response, FILE_NOT_FOUND) == 0)
                 {
                     printf("File not found.\n");
                     break;
                 }
-                // Read last 12 bytes and compare with COMPLETE_MESSAGE
-                if (bytes_received >= 12)
-                {
-                    char *temp = (char *)malloc(13);
-                    memcpy(temp, response + bytes_received - 12, 12);
-                    temp[12] = '\0';
-                    if (strcmp(temp, COMPLETE_MESSAGE) == 0)
-                    {
-                      flag = 1;
-                      bytes_received -= 12;
-                    }
-                    free(temp);
-
-                }
-
-                fwrite(response, 1, bytes_received, fp);
-
-                if(flag == 1)
+                if (strcmp(response, COMPLETE_MESSAGE) == 0)
                 {
                     break;
                 }
+                printf("Received %ld bytes\n", bytes_received);
+                fwrite(response, 1, bytes_received, fp);
+                flag = 1;
             }
 
             fclose(fp);

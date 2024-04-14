@@ -21,7 +21,7 @@
 #define MAX_TOKEN_COUNT 10
 #define MAX_PATH_LEN 1024
 #define MAX_DIRS 1000
-#define MAX_RESPONSE_LENGTH 102400
+#define MAX_RESPONSE_LENGTH 10240
 
 // * Temporary Directory Path for TarKdm
 char* tempDirPath = "/var/tmp/a4TarTempDir";
@@ -71,8 +71,6 @@ int search_by_date_after = 0;
 time_t provided_date = 0;
 
 
-
-
 // Function to reset all the global variables
 void reset_global_variables() {
     single_file_search = 0;
@@ -95,6 +93,18 @@ void reset_global_variables() {
     }
 }
 
+// Function to convert date to time_t
+time_t convertToTimeT(const char *date) {
+    struct tm time_info = {0};
+    strptime(date, "%Y-%m-%d", &time_info);
+    time_info.tm_hour = 0; // Set hours to 0
+    time_info.tm_min = 0;  // Set minutes to 0
+    time_info.tm_sec = 0;  // Set seconds to 0
+    time_info.tm_isdst = -1; // Determine whether Daylight Saving Time is in effect
+    return mktime(&time_info);
+}
+
+// Function to traverse the directories and store the directory information
 void traverse_dir_info(struct DirectoryInfo *directories, int *num_directories, const char *dir_name) {
     DIR *dir;
     struct dirent *entry;
@@ -199,6 +209,10 @@ int Traverse_Files_Recursively(const char *filePath, const struct stat *fileStat
     }
 
     if (search_by_size) {
+        // If File name starts with . then skip
+            if (current_file_name[0] == '.') {
+                return 0;
+            }
         if (fileStats->st_size >= lower_bound_size && fileStats->st_size <= upper_bound_size) {
             struct FileInfo *file_data = (struct FileInfo *)malloc(sizeof(struct FileInfo));
             if (file_data == NULL) {
@@ -218,6 +232,10 @@ int Traverse_Files_Recursively(const char *filePath, const struct stat *fileStat
     }
 
     if (search_by_extension) {
+        // If File name starts with . then skip
+            if (current_file_name[0] == '.') {
+                return 0;
+            }
         for (int i = 0; i < 3; i++) {
             if (file_extensions[i] != NULL) {
                 if (strcasecmp(file_extensions[i], current_file_name + strlen(current_file_name) - strlen(file_extensions[i])) == 0) {
@@ -242,6 +260,10 @@ int Traverse_Files_Recursively(const char *filePath, const struct stat *fileStat
 
     if (search_by_date_before) {
         if (fileStats->st_ctime < provided_date) {
+            // If File name starts with . then skip
+            if (current_file_name[0] == '.') {
+                return 0;
+            }
             struct FileInfo *file_data = (struct FileInfo *)malloc(sizeof(struct FileInfo));
             if (file_data == NULL) {
                 // Handle allocation failure
@@ -261,6 +283,10 @@ int Traverse_Files_Recursively(const char *filePath, const struct stat *fileStat
 
     if (search_by_date_after) {
         if (fileStats->st_ctime > provided_date) {
+            // If File name starts with . then skip
+            if (current_file_name[0] == '.') {
+                return 0;
+            }
             struct FileInfo *file_data = (struct FileInfo *)malloc(sizeof(struct FileInfo));
             if (file_data == NULL) {
                 // Handle allocation failure
@@ -281,6 +307,25 @@ int Traverse_Files_Recursively(const char *filePath, const struct stat *fileStat
     return 0; // No matching criteria found
 }
 
+char* escapeSpaces(const char* input) {
+    size_t len = strlen(input);
+    char* result = (char*)malloc((2 * len + 1) * sizeof(char)); // Maximum length is 2 times the input length
+    if (result == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    size_t j = 0;
+    for (size_t i = 0; i < len; i++) {
+        if (input[i] == ' ') {
+            result[j++] = '\\'; // escape space with backslash
+        }
+        result[j++] = input[i];
+    }
+    result[j] = '\0'; // null-terminate the string
+    return result;
+}
+
 
 int create_tar_and_send(int new_socket){
     // Create dir with timestamp in /var/tmp/a4TarTempDir
@@ -295,8 +340,7 @@ int create_tar_and_send(int new_socket){
 
     for (int i = 0; i < file_count; i++) {
         char copyCommand[1024];
-        sprintf(copyCommand, "cp %s %s", file_list[i]->file_path, tempDirFullPath);
-        printf("Copy Command: %s\n", copyCommand);
+        sprintf(copyCommand, "cp %s %s", escapeSpaces(file_list[i]->file_path), tempDirFullPath);
         system(copyCommand);
     }
 
@@ -379,26 +423,28 @@ void crequest(int new_socket) {
         char **command_tokens = tokenizer(client_code, &token_count);
 
         char message[MAX_RESPONSE_LENGTH];
-
         if (strcmp(command_tokens[0], "dirlist") == 0) {
             if (strcmp(command_tokens[1], "-a") == 0 || strcmp(command_tokens[1], "-t") == 0) {
                 struct DirectoryInfo *directories = malloc(MAX_PATH_LEN * sizeof(struct DirectoryInfo));
 
                 int num_directories = 0;
 
-                traverse_dir_info(directories, &num_directories, "/home/modi97/Desktop/Files");
+                traverse_dir_info(directories, &num_directories, "/home/modi97/Desktop");
 
                 if (strcmp(command_tokens[1], "-a") == 0) {
                     sort_directories(directories, num_directories, "name");
                     for (int i = 0; i < num_directories; i++) {
+                        memset(message, 0, MAX_RESPONSE_LENGTH);
                         strcpy(message, directories[i].name);
                         strcat(message, "\n");
-                        send(new_socket, message, MAX_RESPONSE_LENGTH,0);
+                        int bytesSent = send(new_socket, message, MAX_RESPONSE_LENGTH,0);
+                        printf("Bytes Sent: %d\n", bytesSent);
                     }
                 }
                 if (strcmp(command_tokens[1], "-t") == 0) {
                     sort_directories(directories, num_directories, "creation_time");
                     for (int i = 0; i < num_directories; i++) {
+                        memset(message, 0, MAX_RESPONSE_LENGTH);
                         strcpy(message, directories[i].name);
                         strcat(message, "\n");
                         send(new_socket, message, MAX_RESPONSE_LENGTH,0);
@@ -415,16 +461,16 @@ void crequest(int new_socket) {
             fileNameToSearch = command_tokens[1];
             single_file_search = 1;
 
-            nftw("/home/modi97/Desktop/Files", Traverse_Files_Recursively, 20, FTW_PHYS);
+            nftw("/home/modi97/Desktop", Traverse_Files_Recursively, 20, FTW_PHYS);
 
             // Single File Search
-            file_count = 0;
             if (file_count == 0) {
                 sprintf(message, FILE_NOT_FOUND_ERROR);
                 send(new_socket, message, strlen(message),0);
             } else {
                 // Send File Details
                 for (int i = 0; i < file_count; i++) {
+                    memset(message, 0, MAX_RESPONSE_LENGTH);
                     snprintf(message, sizeof(message), "File Name: %s\nFile Path: %s\nFile Size: %ld\nFile Permissions: %s\n",
                              file_list[i]->name, file_list[i]->file_path, file_list[i]->size, file_list[i]->file_permissions);
                     send(new_socket, message, strlen(message),0);
@@ -440,9 +486,8 @@ void crequest(int new_socket) {
             upper_bound_size = atoi(command_tokens[2]);
             search_by_size = 1;
 
-            nftw("/home/modi97/Desktop/Files", Traverse_Files_Recursively, 20, FTW_PHYS);
+            nftw("/home/modi97/Desktop", Traverse_Files_Recursively, 20, FTW_PHYS);
 
-            file_count = 0;
             if (file_count == 0) {
                 sprintf(message, FILE_NOT_FOUND_ERROR);
                 int bytesSent = send(new_socket, message, strlen(message),0);
@@ -458,54 +503,9 @@ void crequest(int new_socket) {
                 else{
                     printf("Error Creating Tar File\n");
                 }
-                // // Create dir with timestamp in /var/tmp/a4TarTempDir
-                // time_t t = time(NULL);
-                // struct tm tm = *localtime(&t);
-                // char tempTarDirName[1024];
-                // sprintf(tempTarDirName, "Temp%d%d%d%d%d%d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
-
-                // char tempDirFullPath[1024];
-                // sprintf(tempDirFullPath, "%s/%s", tempDirPath, tempTarDirName);
-                // mkdir(tempDirFullPath, 0777);
-
-                // if (mkdirReturn != 0) {
-                //     perror("Error Creating Temp Directory--");
-                // }
-
-                // for (int i = 0; i < file_count; i++) {
-                //     char copyCommand[1024];
-                //     sprintf(copyCommand, "cp %s %s", file_list[i]->file_path, tempTarDirName);
-                //     system(copyCommand);
-                // }
-
-                // // Tar the Files
-                // char tarCommand[1024];
-                // sprintf(tarCommand, "tar -czf /var/tmp/a4TarTempDir/%s.tar.gz -C %s .", tempTarDirName, tempDirFullPath);
-                // system(tarCommand);
-
-                // char tarFilePath[1024];
-                // sprintf(tarFilePath, "/var/tmp/a4TarTempDir/%s.tar.gz", tempTarDirName);
-
-                // // Send Tar file in chunks
-                // FILE *tarFile = fopen(tarFilePath, "rb");
-                // if (tarFile == NULL) {
-                //     perror("Error Opening Tar File");
-                // }
-
-                // char buffer[1024];
-                // size_t bytesRead;
-                // while ((bytesRead = fread(buffer, 1, sizeof(buffer), tarFile)) > 0) {
-                //     send(new_socket, buffer, bytesRead, 0);
-                // }
-                // fclose(tarFile);
-
-                // // Delete Temp Tar File Created and Temp Directory for that tar
-                // char deleteCommand[1024];
-                // sprintf(deleteCommand, "rm -rf %s %s", tempDirFullPath, tarFilePath);
-                // system(deleteCommand);
             }
         } else if (strcmp(command_tokens[0], "w24ft") == 0) {
-            if(token_count < 3 || token_count > 5) {
+            if(token_count < 2 || token_count > 4) {
                 sprintf(message, INVALID_ARGUMENTS_ERROR, command_tokens[0]);
                 send(new_socket, message, strlen(message),0);
                 continue;
@@ -538,7 +538,7 @@ void crequest(int new_socket) {
                 send(new_socket, message, strlen(message),0);
                 continue;
             }
-            provided_date = command_tokens[1];
+            provided_date = convertToTimeT(command_tokens[1]);
             search_by_date_before = 1;
 
             nftw("/home/modi97/Desktop", Traverse_Files_Recursively, 20, FTW_PHYS);
@@ -564,7 +564,7 @@ void crequest(int new_socket) {
                 send(new_socket, message, strlen(message),0);
                 continue;
             }
-            provided_date = command_tokens[1];
+            provided_date = convertToTimeT(command_tokens[1]);
             search_by_date_after = 1;
 
             nftw("/home/modi97/Desktop", Traverse_Files_Recursively, 20, FTW_PHYS);
@@ -592,6 +592,7 @@ void crequest(int new_socket) {
         }
         int finalBytes = send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE),0);
         printf("Final Bytes Sent: %d\n", finalBytes);
+        free(command_tokens);
         reset_global_variables();
     }
 
