@@ -398,7 +398,7 @@ int create_tar_and_send(int new_socket) {
     fclose(tarFile);
     printf("%d\n", total);
 
-    Delete Temp Tar File Created and Temp Directory for that tar
+    // Delete Temp Tar File Created and Temp Directory for that tar
     char deleteCommand[1024];
     sprintf(deleteCommand, "rm -rf %s %s", tempDirFullPath, tarFilePath);
     system(deleteCommand);
