@@ -493,8 +493,8 @@ void crequest(int new_socket) {
                 }
                 free_dir_info(directories);
             }
-            int finalBytes = send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
-            printf("Final Bytes Sent: %d\n", finalBytes);
+            send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
+            
         } else if (strcmp(command_tokens[0], "w24fn") == 0) {
             if (token_count != 2) {
                 sprintf(message, INVALID_ARGUMENTS_ERROR, command_tokens[0]);
@@ -522,8 +522,8 @@ void crequest(int new_socket) {
                     memset(message, 0, MAX_RESPONSE_LENGTH);
                 }
 
-                int finalBytes = send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
-                printf("Final Bytes Sent: %d\n", finalBytes);
+                send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
+                
             }
         } else if (strcmp(command_tokens[0], "w24fz") == 0) {
             if (token_count != 3) {
@@ -548,8 +548,8 @@ void crequest(int new_socket) {
                 // Create Tar File and Send
                 int ret = create_tar_and_send(new_socket);
                 if (ret) {
-                    int finalBytes = send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
-                    printf("Final Bytes Sent: %d\n", finalBytes);
+                    send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
+                    
                     printf("Tar File Created and Sent\n");
                 } else {
                     printf("Error Creating Tar File\n");
@@ -582,8 +582,8 @@ void crequest(int new_socket) {
                 int ret = create_tar_and_send(new_socket);
 
                 if (ret) {
-                    int finalBytes = send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
-                    printf("Final Bytes Sent: %d\n", finalBytes);
+                    send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
+                    
                     printf("Tar File Created and Sent\n");
                 } else {
                     printf("Error Creating Tar File\n");
@@ -607,15 +607,15 @@ void crequest(int new_socket) {
                 sprintf(message, FILE_NOT_FOUND_ERROR);
                 send(new_socket, message, strlen(message), 0);
                 memset(message, 0, MAX_RESPONSE_LENGTH);
-                int finalBytes = send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
-                printf("Final Bytes Sent: %d\n", finalBytes);
+                send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
+                
             } else {
                 // Create Tar File and Send
                 int ret = create_tar_and_send(new_socket);
 
                 if (ret) {
-                    int finalBytes = send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
-                    printf("Final Bytes Sent: %d\n", finalBytes);
+                    send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
+                    
                     printf("Tar File Created and Sent\n");
                 } else {
                     printf("Error Creating Tar File\n");
@@ -638,15 +638,15 @@ void crequest(int new_socket) {
                 sprintf(message, FILE_NOT_FOUND_ERROR);
                 send(new_socket, message, strlen(message), 0);
                 memset(message, 0, MAX_RESPONSE_LENGTH);
-                int finalBytes = send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
-                printf("Final Bytes Sent: %d\n", finalBytes);
+                send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
+                
             } else {
                 // Create Tar File and Send
                 int ret = create_tar_and_send(new_socket);
 
                 if (ret) {
-                    int finalBytes = send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
-                    printf("Final Bytes Sent: %d\n", finalBytes);
+                    send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
+                    
                     printf("Tar File Created and Sent\n");
                 } else {
                     printf("Error Creating Tar File\n");
@@ -697,8 +697,6 @@ void forward_port(int clientfd, struct sockaddr_in client_addr, char *dst_ip, in
         close(dst_sockfd);
         exit(EXIT_FAILURE);
     }
-
-    printf("Connected to destination %s:%d\n", dst_ip, dst_port);
 
     printf("Port forwarding from port %d to port %d\n", ntohs(client_addr.sin_port), dst_port);
 
@@ -751,7 +749,6 @@ void forward_port(int clientfd, struct sockaddr_in client_addr, char *dst_ip, in
         // Close the connections
         close(dst_sockfd);
         close(clientfd);
-        printf("Connection closed\n");
     }
 }
 
@@ -829,14 +826,14 @@ int main() {
                 exit(0);
             }
         } else if ((load_balancer > 3 && load_balancer <= 6) || (load_balancer > 9 && load_balancer % 3 == 2)) {
-            printf("Mirror 1\n");
+            printf("Client Forwarded to Mirror 1\n");
             // close(new_socket);
             if (fork() == 0) {
                 forward_port(new_socket, address, "0.0.0.0", MIRROR_1_PORT);
                 exit(0);
             }
         } else if ((load_balancer > 6 && load_balancer <= 9) || (load_balancer > 9 && load_balancer % 3 == 0)) {
-            printf("Mirror 2\n");
+            printf("Client Forwarded to Mirror 2\n");
             // close(new_socket);
             if (fork() == 0) {
                 forward_port(new_socket, address, "0.0.0.0", MIRROR_2_PORT);

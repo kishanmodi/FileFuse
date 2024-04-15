@@ -58,3 +58,8 @@ server
 file.c
 note
 rc
+
+mirror1
+mirror2
+clientw24
+serverw24
