@@ -104,10 +104,10 @@ char **tokenizer(char *command, int *token_count) {
     char *token = strtok(command, " ");
     *token_count = 0;
     while (token != NULL && *token_count < MAX_TOKEN_COUNT) {
-        command_tokens[*token_count] = strdup(token);
+        command_tokens[*token_count] = strdup(token); // Allocate memory for the token
         if (command_tokens[*token_count] == NULL) {
             // Handle allocation failure
-            fprintf(stderr, ALLOCATION_ERROR);
+            fprintf(stderr, ALLOCATION_ERROR); // Free the allocated memory
             for (int i = 0; i < *token_count; i++) {
                 free(command_tokens[i]);
             }
@@ -115,7 +115,7 @@ char **tokenizer(char *command, int *token_count) {
             return NULL;
         }
         (*token_count)++;
-        token = strtok(NULL, " ");
+        token = strtok(NULL, " "); // Get the next token
     }
     command_tokens[*token_count] = NULL;
     return command_tokens;
@@ -235,7 +235,7 @@ int main(int argc, char *argv[]) {
     char input[MAX_COMMAND_LENGTH];  // Buffer to store the input command
 
     while (1) {
-        printf("$");                              // Prompt the user to enter a command
+        printf("clientw24$ ");                              // Prompt the user to enter a command
         fgets(input, MAX_COMMAND_LENGTH, stdin);  // Read input from the user
         input[strlen(input) - 1] = '\0';          // Remove the newline character from the input
 
@@ -255,7 +255,7 @@ int main(int argc, char *argv[]) {
         char *command = (char *)malloc(strlen(command_tokens[0]) * sizeof(char) + 1);
         strcpy(command, command_tokens[0]);
         for (int i = 1; i < token_count; i++) {
-            command = (char *)realloc(command, strlen(command) + strlen(command_tokens[i]) + 2);
+            command = (char *)realloc(command, strlen(command) + strlen(command_tokens[i]) + 2); // +2 for space and null character
             strcat(command, " ");
             strcat(command, command_tokens[i]);
         }
@@ -265,75 +265,74 @@ int main(int argc, char *argv[]) {
 
         printf("Waiting for response from server...\n");
 
-        char response[RESPONSE_CHUNK] = {0};
+        char response[RESPONSE_CHUNK] = {0}; // Buffer to store the response
 
         int bytes_received;
 
         if (strcmp(command_tokens[0], "dirlist") == 0 || strcmp(command_tokens[0], "who") == 0) {
-            if (strcmp(command_tokens[0], "who") == 0) {
+            if (strcmp(command_tokens[0], "who") == 0) { // If command is who
                 while (1) {
-                    bytes_received = recv(socket_fd, response, RESPONSE_CHUNK, 0);
-                    response[bytes_received] = '\0';
+                    bytes_received = recv(socket_fd, response, RESPONSE_CHUNK, 0); // Receive response from server
                     if (strstr(response, COMPLETE_MESSAGE) != NULL) {
-                        response[bytes_received - 12] = '\0';
+                        response[bytes_received - 12] = '\0'; // Remove the COMPLETE_MESSAGE from the response
                         printf("%s", response);
                         break;
                     }
                 }
-            } else if (strcmp(command_tokens[1], "-a") == 0) {
+            } else if (strcmp(command_tokens[1], "-a") == 0) { // If command is dirlist -a
                 while (1) {
-                    bytes_received = recv(socket_fd, response, RESPONSE_CHUNK, 0);
+                    bytes_received = recv(socket_fd, response, RESPONSE_CHUNK, 0); // Receive response from server
                     if (strstr(response, COMPLETE_MESSAGE) != NULL) break;
-                    printf("%s", response);
+                    printf("%s", response); // Print the response
                 }
             } else if (strcmp(command_tokens[1], "-t") == 0) {
                 while (1) {
-                    bytes_received = recv(socket_fd, response, RESPONSE_CHUNK, 0);
+                    bytes_received = recv(socket_fd, response, RESPONSE_CHUNK, 0); // Receive response from server
                     if (strstr(response, COMPLETE_MESSAGE) != NULL) break;
-                    printf("%s", response);
+                    printf("%s", response); // Print the response
                 }
             }
         } else if (strcmp(command_tokens[0], "w24fn") == 0) {
             size_t bytes_received;
             int flag = 0;
-            while ((bytes_received = recv(socket_fd, response, RESPONSE_CHUNK - 1, 0)) > 0) {
-                response[bytes_received] = '\0';
+            while ((bytes_received = recv(socket_fd, response, RESPONSE_CHUNK - 1, 0)) > 0) { // Receive response - 1 from server
+                response[bytes_received] = '\0'; // Null terminate the response at end
                 // Read last 12 bytes and compare with COMPLETE_MESSAGE
-                if (bytes_received >= 12) {
+                if (bytes_received >= 12) { // If bytes_received is greater than or equal to 12 for complete message
                     char *temp = (char *)malloc(13);
-                    memcpy(temp, response + bytes_received - 12, 12);
+                    memcpy(temp, response + bytes_received - 12, 12);  // Copy the last 12 bytes of response
                     temp[12] = '\0';
                     if (strcmp(temp, COMPLETE_MESSAGE) == 0) {
-                        flag = 1;
+                        flag = 1; // Set flag to 1 for complete message
                         bytes_received -= 12;
                         response[bytes_received] = '\0';
                     }
                     free(temp);
                 }
-                if (strcmp(response, FILE_NOT_FOUND) == 0) {
+                if (strcmp(response, FILE_NOT_FOUND) == 0) { // If response is FILE_NOT_FOUND
                     memset(response, 0, RESPONSE_CHUNK);
                     printf("File not found.\n");
-                    flag = 2;
+                    flag = 2; // Set flag to 2 for file management
                     break;
                 }
-                printf("%s", response);
+                printf("%s", response); // Print the response
                 if (flag == 1) {
-                    memset(response, 0, RESPONSE_CHUNK);
+                    memset(response, 0, RESPONSE_CHUNK); // Clear the response buffer
                     break;
                 }
             }
-        } else if (strstr(command_tokens[0], "quitc")) {
-            printf("Connection closed.\n");
+        } else if (strstr(command_tokens[0], "quitc")) { // If command is quitc
+            printf("Connection closed.\n"); 
             break;
         } else {
             int flag = 0;
-            FILE *fp = fopen("local_temp.tar.gz", "wb");
+            FILE *fp = fopen("local_temp.tar.gz", "wb"); // Open file in write binary mode temporarily file
 
             size_t bytes_received;
-            while ((bytes_received = recv(socket_fd, response, RESPONSE_CHUNK - 1, 0)) > 0) {
-                response[bytes_received] = '\0';
+            while ((bytes_received = recv(socket_fd, response, RESPONSE_CHUNK - 1, 0)) > 0) { // Receive response - 1 from server
+                response[bytes_received] = '\0'; // Null terminate the response at end
                 // Read last 12 bytes and compare with COMPLETE_MESSAGE
-                if (bytes_received >= 12) {
+                if (bytes_received >= 12) { //check if bytes_received is greater than or equal to 12 for complete message
                     char *temp = (char *)malloc(13);
                     memcpy(temp, response + bytes_received - 12, 12);
                     temp[12] = '\0';
@@ -345,35 +344,38 @@ int main(int argc, char *argv[]) {
                     free(temp);
                 }
 
-                if (strcmp(response, FILE_NOT_FOUND) == 0) {
+                if (strcmp(response, FILE_NOT_FOUND) == 0) { // If response is FILE_NOT_FOUND
                     memset(response, 0, RESPONSE_CHUNK);
                     printf("File not found.\n");
-                    flag = 2;
+                    flag = 2; // Set flag to 2 for file management
                     break;
                 }
-                fwrite(response, 1, bytes_received, fp);
+                fwrite(response, 1, bytes_received, fp); // Write the response to the file only if the content is there
                 if (flag == 1) {
-                    memset(response, 0, RESPONSE_CHUNK);
+                    memset(response, 0, RESPONSE_CHUNK); // Clear the response buffer
                     break;
                 }
             }
 
-            fclose(fp);
+            fclose(fp);  // Close the file
 
+            //File managment
             if (flag == 1) {
-                printf("File received successfully.\n");
-                rename("local_temp.tar.gz", "temp.tar.gz");
-                remove("local_temp.tar.gz");
+                printf("File received successfully.\n"); // Print the success message
+                rename("local_temp.tar.gz", "temp.tar.gz"); // Rename the file
             }
+            remove("local_temp.tar.gz"); // Remove the temporary file
         }
 
         int i = 0;
 
+        // Free the allocated memory
         while (command_tokens[i] != NULL) {
             free(command_tokens[i]);
             i++;
         }
 
+        // Free the allocated memory
         free(command);
         free(command_tokens);
 
@@ -381,6 +383,7 @@ int main(int argc, char *argv[]) {
         memset(response, 0, RESPONSE_CHUNK);
     }
 
-    close_connection();
+    close_connection(); // Close the connection with the server
+
     return 0;
 }
