@@ -33,7 +33,7 @@
 #define INVALID_COMMAND_ERROR   "Error: Invalid command\n"
 #define COMPLETE_MESSAGE        "@#COMPLETE#@"
 #define FILE_NOT_FOUND_ERROR    "File not found"
-#define SERVER_NAME             "CONNECTED TO MIRROR2\n"
+#define SERVER_NAME             "CONNECTED TO MIRROR1\n"
 
 // make tempDirPath to relative tmp/a4TarTempDir
 char *tempDirPath = NULL;
