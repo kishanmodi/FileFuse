@@ -14,9 +14,9 @@
 #include <unistd.h>
 
 // Constants for the server
-#define SERVER_PORT         8097
-#define MIRROR_1_PORT       8098
-#define MIRROR_2_PORT       8099
+#define SERVER_PORT         7097
+#define MIRROR_1_PORT       7098
+#define MIRROR_2_PORT       7099
 #define BUFFER_SIZE         1024
 #define MAX_CONNECTIONS     5
 #define MAX_COMMAND_LENGTH  1024
@@ -37,7 +37,7 @@
 #define CONNECTION_CLOSED       "Connection closed"
 
 // make tempDirPath to relative tmp/a4TarTempDir
-char *tempDirPath = "/var/tmp/a4TarTempDir";
+char *tempDirPath = NULL;
 
 char *mainDir = "/home/debian";
 char *DesktopDir = "/home/debian";
@@ -759,6 +759,10 @@ void forward_port(int clientfd, struct sockaddr_in client_addr, char *dst_ip, in
 int main() {
     mainDir = getenv("HOME");
     DesktopDir = getenv("HOME");
+    
+    tempDirPath = (char *)malloc(1024 * sizeof(char));
+    strcpy(tempDirPath, "/var/tmp/");
+    strcat(tempDirPath, getenv("USER"));
     // strcat(DesktopDir, "/Desktop");
 
     // create temp directory
@@ -804,7 +808,7 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    int load_balancer = 1;
+    int load_balancer = 0;
 
     while (1) {
         // Accepting incoming connections
@@ -813,24 +817,32 @@ int main() {
             exit(EXIT_FAILURE);
         }
 
+        load_balancer++;
+        printf("Load Balancer: %d\n", load_balancer);
         if (load_balancer <= 3 || (load_balancer > 9 && load_balancer % 3 == 1)) {
+            printf("Server\n");
+            // close(new_socket);
             int client_process = fork();
             if (client_process == 0) {
                 reset_global_variables();
                 crequest(new_socket);
+                exit(0);
             }
         } else if ((load_balancer > 3 && load_balancer <= 6) || (load_balancer > 9 && load_balancer % 3 == 2)) {
-            // printf("Mirror 1\n");
+            printf("Mirror 1\n");
+            // close(new_socket);
             if (fork() == 0) {
                 forward_port(new_socket, address, "0.0.0.0", MIRROR_1_PORT);
+                exit(0);
             }
         } else if ((load_balancer > 6 && load_balancer <= 9) || (load_balancer > 9 && load_balancer % 3 == 0)) {
-            // printf("Mirror 2\n");
+            printf("Mirror 2\n");
+            // close(new_socket);
             if (fork() == 0) {
                 forward_port(new_socket, address, "0.0.0.0", MIRROR_2_PORT);
+                exit(0);
             }
         }
-        load_balancer++;
     }
 
     return 0;
