@@ -14,9 +14,9 @@
 #include <unistd.h>
 
 // Constants for the server
-#define SERVER_PORT         1611
-#define MIRROR_1_PORT       1608
-#define MIRROR_2_PORT       8060
+#define SERVER_PORT         8097
+#define MIRROR_1_PORT       8098
+#define MIRROR_2_PORT       8099
 #define BUFFER_SIZE         1024
 #define MAX_CONNECTIONS     5
 #define MAX_COMMAND_LENGTH  1024
@@ -93,8 +93,6 @@ char *escapeSpaces(const char *input);
 int create_tar_and_send(int new_socket);
 char **tokenizer(char *command, int *token_count);
 void crequest(int new_socket);
-
-
 
 // Function to reset all the global variables
 void reset_global_variables() {
@@ -758,7 +756,14 @@ void forward_port(int clientfd, struct sockaddr_in client_addr, char *dst_ip, in
 int main() {
     mainDir = getenv("HOME");
     DesktopDir = getenv("HOME");
-    strcat(DesktopDir, "/Desktop");
+    // strcat(DesktopDir, "/Desktop");
+
+    // create temp directory
+    int mkdirReturn = system("mkdir -p a4TarTempDir");
+    if (mkdirReturn != 0) {
+        perror("Error Creating Temp Directory");
+    }
+
     int server_fd, new_socket;
     struct sockaddr_in address;
     int addrlen = sizeof(address);

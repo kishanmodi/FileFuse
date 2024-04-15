@@ -3,26 +3,28 @@
 // 2 dirlist -t -- Return All File Under Home Directory of Server --- Time Order
 // 3 w24fn <filename> -- Return File Name size (bytes), date of creation, file permissions
 // 4 w24fz <size1> <size2> -- Return All Files with size between size1 and size2 in tar.gz format
-// 5 w24ft <file_extension1> <file_extension2> <file_extension3> -- upto 3 file extensions, min 1 --> return all files with the given extensions in tar.gz format
-// 6 w24fdb <date> -- Return all files created before the given date in tar.gz format
+// 5 w24ft <file_extension1> <file_extension2> <file_extension3> -- upto 3 file extensions, min 1 --> return all files
+// with the given extensions in tar.gz format
+// 6 w24fdb <date> -- Return all files created before the given date in
+// tar.gz format
 // 7 w24fda <date> -- Return all files created after the given date in tar.gz format
 // 8 quitc -- Close the connection with the server
 
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <regex.h>
+#include <arpa/inet.h>   // For inet_addr
+#include <netinet/in.h>  // For sockaddr_in
+#include <regex.h>       // For regex
+#include <stdio.h>       // For standard I/O
+#include <stdlib.h>      // For standard library
+#include <string.h>      // For string functions
+#include <sys/socket.h>  // For socket functions
+#include <sys/types.h>   // For system types
+#include <unistd.h>      // For close function
 
 // Constants
-#define MAX_COMMAND_LENGTH 1024
-#define MAX_TOKEN_COUNT    10
-#define RESPONSE_CHUNK     1024
-#define IP_LENGTH          INET_ADDRSTRLEN
+#define MAX_COMMAND_LENGTH 1024             // Maximum length of the command
+#define MAX_TOKEN_COUNT    10               // Maximum number of tokens in the command
+#define RESPONSE_CHUNK     1024             // Maximum length of the response
+#define IP_LENGTH          INET_ADDRSTRLEN  // Length of IP Address
 
 // Error Messages
 #define INVALID_IP_ERROR        "Error: Invalid IP Address\n"
@@ -33,16 +35,20 @@
 #define INVALID_COMMAND_ERROR   "Error: Invalid command\n"
 #define COMPLETE_MESSAGE        "@#COMPLETE#@"
 #define FILE_NOT_FOUND          "File not found"
+#define CONNECTION_CLOSED       "Connection closed"
 
 // Global Variables
-int socket_fd, port;
-char ip[IP_LENGTH];
+int socket_fd, port;  // Socket File Descriptor and Port Number
+char ip[IP_LENGTH];   // IP Address
 
 int establish_connection();
 void close_connection();
 int validate_ip_port();
 char **tokenizer(char *command, int *token_count);
 int verify_command_syntax(char **command_tokens, int tokenCount);
+int verifyDateFormat(char *date_r);
+
+// FUNCTION DEFINITIONS
 
 // Function to establish connection with server using socket
 int establish_connection() {
@@ -69,9 +75,7 @@ int establish_connection() {
 }
 
 // Function to close connection with server
-void close_connection() {
-    close(socket_fd);
-}
+void close_connection() { close(socket_fd); }
 
 // Function to validate IP address and port number
 int validate_ip_port() {
@@ -117,34 +121,28 @@ char **tokenizer(char *command, int *token_count) {
     return command_tokens;
 }
 
+// Function to verify the date format
 int verifyDateFormat(char *date_r) {
-    regex_t regex;
+    regex_t regex;  // Structure to store compiled regex
     int regexCheck;
-
-    char *date = strdup(date_r);
-
-    // Compile the regular expression
-    regexCheck = regcomp(&regex, "^[0-9]{4}-((0[1-9])|(1[0-2]))-((0[1-9])|([1-2][0-9])|(3[01]))$", REG_EXTENDED);
+    char *date = strdup(date_r);                                                                                   // Copy the date to a new string
+    regexCheck = regcomp(&regex, "^[0-9]{4}-((0[1-9])|(1[0-2]))-((0[1-9])|([1-2][0-9])|(3[01]))$", REG_EXTENDED);  //    Compile the regex
     if (regexCheck != 0) {
-        // Handle compilation error
         printf("Error compiling regex\n");
         return 0;
     }
-
-    // Execute the regular expression
     regexCheck = regexec(&regex, date, 0, NULL, 0);
     if (regexCheck == 0) {
         regfree(&regex);
-        return 1;
+        return 1;  // Date is valid
     } else if (regexCheck == REG_NOMATCH) {
         regfree(&regex);
-        return 0;
+        return 0;  // Date is invalid
     } else {
         regfree(&regex);
-        return 0;
+        return 0;  // Error in regex
     }
 }
-
 
 // Function to verify the syntax of the command
 int verify_command_syntax(char **command_tokens, int tokenCount) {
@@ -179,7 +177,7 @@ int verify_command_syntax(char **command_tokens, int tokenCount) {
             return 0;
         }
 
-        if(verifyDateFormat(command_tokens[1]) == 0){
+        if (verifyDateFormat(command_tokens[1]) == 0) {
             fprintf(stderr, INVALID_DATE_ERROR);
             return 0;
         }
@@ -190,7 +188,7 @@ int verify_command_syntax(char **command_tokens, int tokenCount) {
             return 0;
         }
 
-        if(verifyDateFormat(command_tokens[1]) == 0){
+        if (verifyDateFormat(command_tokens[1]) == 0) {
             fprintf(stderr, INVALID_DATE_ERROR);
             return 0;
         }
@@ -214,12 +212,15 @@ int verify_command_syntax(char **command_tokens, int tokenCount) {
 
 // Main function
 int main(int argc, char *argv[]) {
-    strcpy(ip, "127.0.0.1");
-    port = 8081;
-
-    if (argc > 1) {
-        port = atoi(argv[1]);
+    // Validate Command Line Arguments
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s <IP Address> <Port Number>\n", argv[0]);
+        return 0;
     }
+
+    // Store IP Address and Port Number
+    strcpy(ip, argv[1]);
+    port = atoi(argv[2]);
 
     // Validate IP Address and Port Number
     if (validate_ip_port() == 0) {
@@ -231,15 +232,15 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
-    char input[MAX_COMMAND_LENGTH];
+    char input[MAX_COMMAND_LENGTH];  // Buffer to store the input command
 
     while (1) {
-        printf("Enter Command: ");
+        printf("$");                              // Prompt the user to enter a command
         fgets(input, MAX_COMMAND_LENGTH, stdin);  // Read input from the user
         input[strlen(input) - 1] = '\0';          // Remove the newline character from the input
 
         if (strcmp(input, "") == 0 || strlen(input) == 0) {
-            continue;
+            continue;  // Skip if the input is empty
         }
 
         // Tokenize the Command
@@ -249,10 +250,6 @@ int main(int argc, char *argv[]) {
         // Verify the Syntax of the Command
         if (verify_command_syntax(command_tokens, token_count) == 0) {
             continue;
-        }
-
-        if (strcmp(command_tokens[0], "quitc") == 0) {
-            break;
         }
 
         char *command = (char *)malloc(strlen(command_tokens[0]) * sizeof(char) + 1);
@@ -277,7 +274,7 @@ int main(int argc, char *argv[]) {
                 while (1) {
                     bytes_received = recv(socket_fd, response, RESPONSE_CHUNK, 0);
                     response[bytes_received] = '\0';
-                    if (strstr(response, COMPLETE_MESSAGE) != NULL){
+                    if (strstr(response, COMPLETE_MESSAGE) != NULL) {
                         response[bytes_received - 12] = '\0';
                         printf("%s", response);
                         break;
@@ -286,20 +283,17 @@ int main(int argc, char *argv[]) {
             } else if (strcmp(command_tokens[1], "-a") == 0) {
                 while (1) {
                     bytes_received = recv(socket_fd, response, RESPONSE_CHUNK, 0);
-                    if (strstr(response, COMPLETE_MESSAGE) != NULL)
-                        break;
+                    if (strstr(response, COMPLETE_MESSAGE) != NULL) break;
                     printf("%s", response);
                 }
             } else if (strcmp(command_tokens[1], "-t") == 0) {
                 while (1) {
                     bytes_received = recv(socket_fd, response, RESPONSE_CHUNK, 0);
-                    if (strstr(response, COMPLETE_MESSAGE) != NULL)
-                        break;
+                    if (strstr(response, COMPLETE_MESSAGE) != NULL) break;
                     printf("%s", response);
                 }
             }
-        }
-        else if(strcmp(command_tokens[0], "w24fn") == 0){
+        } else if (strcmp(command_tokens[0], "w24fn") == 0) {
             size_t bytes_received;
             int flag = 0;
             while ((bytes_received = recv(socket_fd, response, RESPONSE_CHUNK - 1, 0)) > 0) {
@@ -317,19 +311,21 @@ int main(int argc, char *argv[]) {
                     free(temp);
                 }
                 if (strcmp(response, FILE_NOT_FOUND) == 0) {
-                    memset(response,0,RESPONSE_CHUNK);
+                    memset(response, 0, RESPONSE_CHUNK);
                     printf("File not found.\n");
                     flag = 2;
                     break;
                 }
-                printf("%s",response);
+                printf("%s", response);
                 if (flag == 1) {
-                    memset(response,0,RESPONSE_CHUNK);
+                    memset(response, 0, RESPONSE_CHUNK);
                     break;
                 }
             }
-        }
-        else {
+        } else if (strstr(command_tokens[0], "quitc")) {
+            printf("Connection closed.\n");
+            break;
+        } else {
             int flag = 0;
             FILE *fp = fopen("local_temp.tar.gz", "wb");
 
@@ -350,14 +346,14 @@ int main(int argc, char *argv[]) {
                 }
 
                 if (strcmp(response, FILE_NOT_FOUND) == 0) {
-                    memset(response,0,RESPONSE_CHUNK);
+                    memset(response, 0, RESPONSE_CHUNK);
                     printf("File not found.\n");
                     flag = 2;
                     break;
                 }
                 fwrite(response, 1, bytes_received, fp);
                 if (flag == 1) {
-                    memset(response,0,RESPONSE_CHUNK);
+                    memset(response, 0, RESPONSE_CHUNK);
                     break;
                 }
             }

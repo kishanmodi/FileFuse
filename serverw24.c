@@ -14,9 +14,9 @@
 #include <unistd.h>
 
 // Constants for the server
-#define SERVER_PORT         1611
-#define MIRROR_1_PORT       1608
-#define MIRROR_2_PORT       8060
+#define SERVER_PORT         8097
+#define MIRROR_1_PORT       8098
+#define MIRROR_2_PORT       8099
 #define BUFFER_SIZE         1024
 #define MAX_CONNECTIONS     5
 #define MAX_COMMAND_LENGTH  1024
@@ -34,6 +34,7 @@
 #define COMPLETE_MESSAGE        "@#COMPLETE#@"
 #define FILE_NOT_FOUND_ERROR    "File not found"
 #define SERVER_NAME             "CONNECTED TO SERVER\n"
+#define CONNECTION_CLOSED       "Connection closed"
 
 // make tempDirPath to relative tmp/a4TarTempDir
 char *tempDirPath = "/var/tmp/a4TarTempDir";
@@ -446,7 +447,9 @@ void crequest(int new_socket) {
     while (1) {
         // Read the command from the client
         // CReate Temp Directory
-        int mkdirReturn = system("mkdir -p a4TarTempDir");
+        char *mkdirCommand = (char *)malloc(1024);
+        sprintf(mkdirCommand, "mkdir -p %s", tempDirPath);
+        int mkdirReturn = system(mkdirCommand);
         if (mkdirReturn != 0) {
             perror("Error Creating Temp Directory");
         }
@@ -654,6 +657,7 @@ void crequest(int new_socket) {
             send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
             memset(message, 0, MAX_RESPONSE_LENGTH);
         } else if (strcmp(command_tokens[0], "quitc") == 0) {
+            send(new_socket, CONNECTION_CLOSED, strlen(CONNECTION_CLOSED), 0);
             break;
         } else {
             sprintf(message, INVALID_COMMAND_ERROR);
@@ -755,7 +759,13 @@ void forward_port(int clientfd, struct sockaddr_in client_addr, char *dst_ip, in
 int main() {
     mainDir = getenv("HOME");
     DesktopDir = getenv("HOME");
-    strcat(DesktopDir, "/Desktop");
+    // strcat(DesktopDir, "/Desktop");
+
+    // create temp directory
+    int mkdirReturn = system("mkdir -p a4TarTempDir");
+    if (mkdirReturn != 0) {
+        perror("Error Creating Temp Directory");
+    }
     int server_fd, new_socket;
     struct sockaddr_in address;
     int addrlen = sizeof(address);
