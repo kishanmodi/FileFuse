@@ -59,7 +59,7 @@ struct FileInfo {
 };
 
 // Common Var For File Commands
-struct FileInfo *file_list[1024];
+struct FileInfo *file_list[1024000];
 int file_count = 0;
 
 // Common Var For File Search
@@ -120,11 +120,11 @@ void reset_global_variables() {
 // Function to convert date to time_t
 time_t convertToTimeT(const char *date) {
     struct tm time_info = {0};
-    strptime(date, "%Y-%m-%d", &time_info); // Parse the date
-    time_info.tm_hour = 0;    // Set hours to 0
-    time_info.tm_min = 0;     // Set minutes to 0
-    time_info.tm_sec = 0;     // Set seconds to 0
-    time_info.tm_isdst = -1;  // Determine whether Daylight Saving Time is in effect
+    strptime(date, "%Y-%m-%d", &time_info);  // Parse the date
+    time_info.tm_hour = 0;                   // Set hours to 0
+    time_info.tm_min = 0;                    // Set minutes to 0
+    time_info.tm_sec = 0;                    // Set seconds to 0
+    time_info.tm_isdst = -1;                 // Determine whether Daylight Saving Time is in effect
     return mktime(&time_info);
 }
 
@@ -134,27 +134,27 @@ void traverse_dir_info(struct DirectoryInfo *directories, int *num_directories, 
     struct dirent *entry;
     struct stat file_info;
 
-    dir = opendir(dir_name); // Open the directory
+    dir = opendir(dir_name);  // Open the directory
     if (dir == NULL) {
         perror("opendir");
         return;
     }
 
     while ((entry = readdir(dir)) != NULL) {
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0 || entry->d_name[0] == '.') // Skip . and .. directories
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0 || entry->d_name[0] == '.')  // Skip . and .. directories
             continue;
 
         char path[MAX_PATH_LEN];
-        sprintf(path, "%s/%s", dir_name, entry->d_name); // Create the path to the file or directory
-        if (lstat(path, &file_info) == -1) {            // Get information about the file or directory
+        sprintf(path, "%s/%s", dir_name, entry->d_name);  // Create the path to the file or directory
+        if (lstat(path, &file_info) == -1) {              // Get information about the file or directory
             perror("lstat");
             continue;
         }
 
-        if (S_ISDIR(file_info.st_mode)) {  // Check if the entry is a directory
-            if (*num_directories < 100) {  // Ensure array bounds are not exceeded
-                strncpy(directories[*num_directories].name, entry->d_name, sizeof(directories[*num_directories].name)); // Copy the directory name
-                directories[*num_directories].creation_time = file_info.st_ctime; // Copy the creation time
+        if (S_ISDIR(file_info.st_mode)) {                                                                                // Check if the entry is a directory
+            if (*num_directories < 100) {                                                                                // Ensure array bounds are not exceeded
+                strncpy(directories[*num_directories].name, entry->d_name, sizeof(directories[*num_directories].name));  // Copy the directory name
+                directories[*num_directories].creation_time = file_info.st_ctime;                                        // Copy the creation time
                 (*num_directories)++;
                 traverse_dir_info(directories, num_directories, path);  // Recursive call
             } else {
@@ -194,35 +194,35 @@ int compare_directories_by_creation_time(const void *a, const void *b) {
 // Function to sort directories based on the sort key
 void sort_directories(struct DirectoryInfo *directories, int num_directories, const char *sort_key) {
     if (strcmp(sort_key, "name") == 0) {
-        qsort(directories, num_directories, sizeof(struct DirectoryInfo), compare_directories_by_name); 
+        qsort(directories, num_directories, sizeof(struct DirectoryInfo), compare_directories_by_name);
         // qsort to sort the directories by name
     } else if (strcmp(sort_key, "creation_time") == 0) {
-        qsort(directories, num_directories, sizeof(struct DirectoryInfo), compare_directories_by_creation_time); 
+        qsort(directories, num_directories, sizeof(struct DirectoryInfo), compare_directories_by_creation_time);
         // qsort to sort the directories by creation time
     }
 }
 
 // Function to traverse files recursively using nftw
 int Traverse_Files_Recursively(const char *filePath, const struct stat *fileStats, int typeFlag, struct FTW *fileDirInfo) {
-    if (typeFlag != FTW_F) { // Check if the entry is a file
+    if (typeFlag != FTW_F) {  // Check if the entry is a file
         return 0;
     }
 
-    const char *current_file_name = filePath + fileDirInfo->base; // Get the file name
+    const char *current_file_name = filePath + fileDirInfo->base;  // Get the file name
 
     if (single_file_search) {
         if (strcasecmp(fileNameToSearch, current_file_name) == 0) {
-            struct FileInfo *file_data = (struct FileInfo *)malloc(sizeof(struct FileInfo)); // Allocate memory for the file information
+            struct FileInfo *file_data = (struct FileInfo *)malloc(sizeof(struct FileInfo));  // Allocate memory for the file information
             if (file_data == NULL) {
                 // Handle allocation failure
                 fprintf(stderr, ALLOCATION_ERROR);
                 return 1;
             }
 
-            strncpy(file_data->name, current_file_name, sizeof(file_data->name)); // Copy the file name
-            file_data->creation_time = fileStats->st_ctime; // Copy the creation time
-            file_data->size = fileStats->st_size; // Copy the file size
-            strncpy(file_data->file_path, filePath, sizeof(file_data->file_path)); // Copy the file path
+            strncpy(file_data->name, current_file_name, sizeof(file_data->name));   // Copy the file name
+            file_data->creation_time = fileStats->st_ctime;                         // Copy the creation time
+            file_data->size = fileStats->st_size;                                   // Copy the file size
+            strncpy(file_data->file_path, filePath, sizeof(file_data->file_path));  // Copy the file path
             snprintf(file_data->file_permissions, sizeof(file_data->file_permissions), "%s%s%s%s%s%s%s%s%s",
                      S_ISDIR(fileStats->st_mode) ? "d" : "-",
                      (fileStats->st_mode & S_IRUSR) ? "r" : "-",
@@ -233,8 +233,8 @@ int Traverse_Files_Recursively(const char *filePath, const struct stat *fileStat
                      (fileStats->st_mode & S_IXGRP) ? "x" : "-",
                      (fileStats->st_mode & S_IROTH) ? "r" : "-",
                      (fileStats->st_mode & S_IWOTH) ? "w" : "-",
-                     (fileStats->st_mode & S_IXOTH) ? "x" : "-"); // Copy the file permissions
-            file_list[file_count] = file_data; // Add the file information to the file list
+                     (fileStats->st_mode & S_IXOTH) ? "x" : "-");  // Copy the file permissions
+            file_list[file_count] = file_data;                     // Add the file information to the file list
             file_count++;
             return 1;  // Stop NFTW Process as file is found
         }
@@ -242,11 +242,11 @@ int Traverse_Files_Recursively(const char *filePath, const struct stat *fileStat
 
     if (search_by_size) {
         // If File name starts with . then skip
-        if (current_file_name[0] == '.') { // Skip hidden files
+        if (current_file_name[0] == '.') {  // Skip hidden files
             return 0;
         }
 
-        if (fileStats->st_size >= lower_bound_size && fileStats->st_size <= upper_bound_size) { // Check if the file size is within the specified range
+        if (fileStats->st_size >= lower_bound_size && fileStats->st_size <= upper_bound_size) {  // Check if the file size is within the specified range
             struct FileInfo *file_data = (struct FileInfo *)malloc(sizeof(struct FileInfo));
             if (file_data == NULL) {
                 // Handle allocation failure
@@ -254,11 +254,11 @@ int Traverse_Files_Recursively(const char *filePath, const struct stat *fileStat
                 return 1;
             }
 
-            strncpy(file_data->name, current_file_name, sizeof(file_data->name)); // Copy the file name
+            strncpy(file_data->name, current_file_name, sizeof(file_data->name));  // Copy the file name
             file_data->size = fileStats->st_size;
-            strncpy(file_data->file_path, filePath, sizeof(file_data->file_path)); // Copy the file path
+            strncpy(file_data->file_path, filePath, sizeof(file_data->file_path));  // Copy the file path
 
-            file_list[file_count] = file_data; // Add the file information to the file list
+            file_list[file_count] = file_data;  // Add the file information to the file list
             file_count++;
             return 0;
         }
@@ -272,17 +272,17 @@ int Traverse_Files_Recursively(const char *filePath, const struct stat *fileStat
         for (int i = 0; i < 3; i++) {
             if (file_extensions[i] != NULL) {
                 // Check if the file extension matches the specified extension
-                if (strcasecmp(file_extensions[i], current_file_name + strlen(current_file_name) - strlen(file_extensions[i])) == 0) { 
-                    struct FileInfo *file_data = (struct FileInfo *)malloc(sizeof(struct FileInfo)); // Allocate memory for the file information
+                if (strcasecmp(file_extensions[i], current_file_name + strlen(current_file_name) - strlen(file_extensions[i])) == 0) {
+                    struct FileInfo *file_data = (struct FileInfo *)malloc(sizeof(struct FileInfo));  // Allocate memory for the file information
                     if (file_data == NULL) {
                         // Handle allocation failure
                         fprintf(stderr, ALLOCATION_ERROR);
                         return 1;
                     }
 
-                    strncpy(file_data->name, current_file_name, sizeof(file_data->name)); // Copy the file name
-                    strncpy(file_data->file_path, filePath, sizeof(file_data->file_path)); // Copy the file path
-                    strncpy(file_data->file_extension, file_extensions[i], sizeof(file_data->file_extension)); // Copy the file extension
+                    strncpy(file_data->name, current_file_name, sizeof(file_data->name));                       // Copy the file name
+                    strncpy(file_data->file_path, filePath, sizeof(file_data->file_path));                      // Copy the file path
+                    strncpy(file_data->file_extension, file_extensions[i], sizeof(file_data->file_extension));  // Copy the file extension
 
                     file_list[file_count] = file_data;
                     file_count++;
@@ -292,8 +292,8 @@ int Traverse_Files_Recursively(const char *filePath, const struct stat *fileStat
         }
     }
 
-    if (search_by_date_before) { // Check if the file creation time is before the specified date
-        if (fileStats->st_ctime < provided_date) { // Check if the file creation time is before the specified date
+    if (search_by_date_before) {                    // Check if the file creation time is before the specified date
+        if (fileStats->st_ctime < provided_date) {  // Check if the file creation time is before the specified date
             // If File name starts with . then skip
             if (current_file_name[0] == '.') {
                 return 0;
@@ -309,14 +309,14 @@ int Traverse_Files_Recursively(const char *filePath, const struct stat *fileStat
             file_data->creation_time = fileStats->st_ctime;
             strncpy(file_data->file_path, filePath, sizeof(file_data->file_path));
 
-            file_list[file_count] = file_data; // Add the file information to the file list
+            file_list[file_count] = file_data;  // Add the file information to the file list
             file_count++;
             return 0;
         }
     }
 
-    if (search_by_date_after) { // Check if the file creation time is after the specified date
-        if (fileStats->st_ctime > provided_date) { // Check if the file creation time is after the specified date
+    if (search_by_date_after) {                     // Check if the file creation time is after the specified date
+        if (fileStats->st_ctime > provided_date) {  // Check if the file creation time is after the specified date
             // If File name starts with . then skip
             if (current_file_name[0] == '.') {
                 return 0;
@@ -332,7 +332,7 @@ int Traverse_Files_Recursively(const char *filePath, const struct stat *fileStat
             file_data->creation_time = fileStats->st_ctime;
             strncpy(file_data->file_path, filePath, sizeof(file_data->file_path));
 
-            file_list[file_count] = file_data; // Add the file information to the file list
+            file_list[file_count] = file_data;  // Add the file information to the file list
             file_count++;
             return 0;
         }
@@ -367,19 +367,19 @@ int create_tar_and_send(int new_socket) {
     int total = 0;
     // Get the current time
     time_t t = time(NULL);
-    struct tm tm = *localtime(&t); 
+    struct tm tm = *localtime(&t);
     char tempTarDirName[1024];
     // Create a unique directory name
-    sprintf(tempTarDirName, "Temp%d%d%d%d%d%d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec); 
+    sprintf(tempTarDirName, "Temp%d%d%d%d%d%d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
 
     char tempDirFullPath[1024];
-    sprintf(tempDirFullPath, "%s/%s", tempDirPath, tempTarDirName); // Create the full path to the directory
-    mkdir(tempDirFullPath, 0777); // Create the directory with the specified permissions
+    sprintf(tempDirFullPath, "%s/%s", tempDirPath, tempTarDirName);  // Create the full path to the directory
+    mkdir(tempDirFullPath, 0777);                                    // Create the directory with the specified permissions
 
     for (int i = 0; i < file_count; i++) {
         char copyCommand[1024];
         // Copy the file to the temporary directory
-        sprintf(copyCommand, "cp %s %s", escapeSpaces(file_list[i]->file_path), tempDirFullPath); 
+        sprintf(copyCommand, "cp %s %s", escapeSpaces(file_list[i]->file_path), tempDirFullPath);
         system(copyCommand);
     }
 
@@ -389,10 +389,10 @@ int create_tar_and_send(int new_socket) {
     system(tarCommand);
 
     char tarFilePath[1024];
-    sprintf(tarFilePath, "%s/%s.tar.gz", tempDirPath, tempTarDirName); // Create the full path to the tar file
+    sprintf(tarFilePath, "%s/%s.tar.gz", tempDirPath, tempTarDirName);  // Create the full path to the tar file
 
     // Send Tar file in chunks
-    FILE *tarFile = fopen(tarFilePath, "rb"); // Open the tar file in read mode to send it in chunks
+    FILE *tarFile = fopen(tarFilePath, "rb");  // Open the tar file in read mode to send it in chunks
     if (tarFile == NULL) {
         fprintf(stderr, "Error Opening Tar File\n");
         return 0;
@@ -400,13 +400,13 @@ int create_tar_and_send(int new_socket) {
 
     char buffer[1024];
     size_t bytesRead;
-    while ((bytesRead = fread(buffer, 1, sizeof(buffer), tarFile)) > 0) { // Read the tar file in chunks
-        send(new_socket, buffer, bytesRead, 0); // Send the chunk to the client socket
-        memset(buffer, 0, sizeof(buffer)); // Clear the buffer
-        total += bytesRead; // Update the total bytes sent
+    while ((bytesRead = fread(buffer, 1, sizeof(buffer), tarFile)) > 0) {  // Read the tar file in chunks
+        send(new_socket, buffer, bytesRead, 0);                            // Send the chunk to the client socket
+        memset(buffer, 0, sizeof(buffer));                                 // Clear the buffer
+        total += bytesRead;                                                // Update the total bytes sent
     }
     fclose(tarFile);
-    printf("Total Bytes Sent: %d\n", total); // Print the total bytes sent
+    printf("Total Bytes Sent: %d\n", total);  // Print the total bytes sent
 
     // Delete Temp Tar File Created and Temp Directory for that tar
     char deleteCommand[1024];
@@ -425,10 +425,10 @@ char **tokenizer(char *command, int *token_count) {
         return NULL;
     }
 
-    char *token = strtok(command, " "); // Tokenize the command based on space
-    *token_count = 0; // Initialize the token count
+    char *token = strtok(command, " ");  // Tokenize the command based on space
+    *token_count = 0;                    // Initialize the token count
     while (token != NULL && *token_count < MAX_TOKEN_COUNT) {
-        command_tokens[*token_count] = strdup(token); // Copy the token to the command tokens array
+        command_tokens[*token_count] = strdup(token);  // Copy the token to the command tokens array
         if (command_tokens[*token_count] == NULL) {
             // Handle allocation failure
             fprintf(stderr, ALLOCATION_ERROR);
@@ -439,10 +439,10 @@ char **tokenizer(char *command, int *token_count) {
             return NULL;
         }
         (*token_count)++;
-        token = strtok(NULL, " "); // Get the next token
+        token = strtok(NULL, " ");  // Get the next token
     }
-    command_tokens[*token_count] = NULL; // Null-terminate the command tokens array
-    return command_tokens; 
+    command_tokens[*token_count] = NULL;  // Null-terminate the command tokens array
+    return command_tokens;
 }
 
 // Function to handle client requests
@@ -469,27 +469,27 @@ void crequest(int new_socket) {
         int token_count = 0;
         char **command_tokens = tokenizer(client_code, &token_count);
 
-        char message[MAX_RESPONSE_LENGTH]; // Buffer to store the response to be sent to the client
+        char message[MAX_RESPONSE_LENGTH];  // Buffer to store the response to be sent to the client
         if (strcmp(command_tokens[0], "dirlist") == 0) {
             if (strcmp(command_tokens[1], "-a") == 0 || strcmp(command_tokens[1], "-t") == 0) {
                 struct DirectoryInfo *directories = malloc(MAX_PATH_LEN * sizeof(struct DirectoryInfo));
 
                 int num_directories = 0;
 
-                traverse_dir_info(directories, &num_directories, DesktopDir); // Traverse the directories
+                traverse_dir_info(directories, &num_directories, DesktopDir);  // Traverse the directories
 
                 if (strcmp(command_tokens[1], "-a") == 0) {
-                    sort_directories(directories, num_directories, "name"); // Sort the directories by name
+                    sort_directories(directories, num_directories, "name");  // Sort the directories by name
                     for (int i = 0; i < num_directories; i++) {
-                        memset(message, 0, MAX_RESPONSE_LENGTH); // Clear the message buffer
-                        strcpy(message, directories[i].name); // Copy the directory name to the message buffer
+                        memset(message, 0, MAX_RESPONSE_LENGTH);  // Clear the message buffer
+                        strcpy(message, directories[i].name);     // Copy the directory name to the message buffer
                         strcat(message, "\n");
-                        int bytesSent = send(new_socket, message, MAX_RESPONSE_LENGTH, 0); // Send the directory name to the client
-                        memset(message, 0, MAX_RESPONSE_LENGTH); // Clear the message buffer
+                        int bytesSent = send(new_socket, message, MAX_RESPONSE_LENGTH, 0);  // Send the directory name to the client
+                        memset(message, 0, MAX_RESPONSE_LENGTH);                            // Clear the message buffer
                     }
                 }
                 if (strcmp(command_tokens[1], "-t") == 0) {
-                    sort_directories(directories, num_directories, "creation_time"); // Sort the directories by creation time
+                    sort_directories(directories, num_directories, "creation_time");  // Sort the directories by creation time
                     for (int i = 0; i < num_directories; i++) {
                         memset(message, 0, MAX_RESPONSE_LENGTH);
                         strcpy(message, directories[i].name);
@@ -498,22 +498,22 @@ void crequest(int new_socket) {
                         memset(message, 0, MAX_RESPONSE_LENGTH);
                     }
                 }
-                free_dir_info(directories); // Free the memory allocated for directory information
+                free_dir_info(directories);  // Free the memory allocated for directory information
             }
             send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
-            
-        } else if (strcmp(command_tokens[0], "w24fn") == 0) { // Search for a file by name
+
+        } else if (strcmp(command_tokens[0], "w24fn") == 0) {  // Search for a file by name
             if (token_count != 2) {
-                sprintf(message, INVALID_ARGUMENTS_ERROR, command_tokens[0]); // Invalid number of arguments
+                sprintf(message, INVALID_ARGUMENTS_ERROR, command_tokens[0]);  // Invalid number of arguments
                 send(new_socket, message, strlen(message), 0);
                 memset(message, 0, MAX_RESPONSE_LENGTH);
                 continue;
             }
 
-            fileNameToSearch = command_tokens[1]; // Get the file name to search
+            fileNameToSearch = command_tokens[1];  // Get the file name to search
             single_file_search = 1;
 
-            nftw(DesktopDir, Traverse_Files_Recursively, 20, FTW_PHYS); // Traverse the files recursively
+            nftw(DesktopDir, Traverse_Files_Recursively, 20, FTW_PHYS);  // Traverse the files recursively
 
             // Single File Search
             if (file_count == 0) {
@@ -523,7 +523,7 @@ void crequest(int new_socket) {
             } else {
                 // Send File Details
                 for (int i = 0; i < file_count; i++) {
-                    memset(message, 0, MAX_RESPONSE_LENGTH); 
+                    memset(message, 0, MAX_RESPONSE_LENGTH);
                     // Format the file details to be sent to the client
                     snprintf(message, sizeof(message), "----------------------------------------------------\nFile Name: %s\nFile Path: %s\nFile Size: %ld\nFile Permissions: %s\n----------------------------------------------------\n",
                              file_list[i]->name, file_list[i]->file_path, file_list[i]->size, file_list[i]->file_permissions);
@@ -547,7 +547,7 @@ void crequest(int new_socket) {
             upper_bound_size = atoi(command_tokens[2]);
             search_by_size = 1;
 
-            nftw(DesktopDir, Traverse_Files_Recursively, 20, FTW_PHYS); // Traverse the files recursively
+            nftw(DesktopDir, Traverse_Files_Recursively, 20, FTW_PHYS);  // Traverse the files recursively
 
             if (file_count == 0) {
                 sprintf(message, FILE_NOT_FOUND_ERROR);
@@ -571,8 +571,8 @@ void crequest(int new_socket) {
                 continue;
             }
             for (int i = 1; i < token_count; i++) {
-                char *tempExtension = (char *)malloc((strlen(command_tokens[i]) * sizeof(char)) + 1); // Allocate memory for the file extension
-                strcpy(tempExtension, "."); // Add a . to the beginning of the file extension
+                char *tempExtension = (char *)malloc((strlen(command_tokens[i]) * sizeof(char)) + 1);  // Allocate memory for the file extension
+                strcpy(tempExtension, ".");                                                            // Add a . to the beginning of the file extension
                 strcat(tempExtension, command_tokens[i]);
 
                 file_extensions[i - 1] = tempExtension;
@@ -593,7 +593,7 @@ void crequest(int new_socket) {
 
                 if (ret) {
                     send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
-                    
+
                     printf("Tar File Created and Sent\n");
                 } else {
                     printf("Error Creating Tar File\n");
@@ -620,14 +620,14 @@ void crequest(int new_socket) {
                 send(new_socket, message, strlen(message), 0);
                 memset(message, 0, MAX_RESPONSE_LENGTH);
                 send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
-                
+
             } else {
                 // Create Tar File and Send
                 int ret = create_tar_and_send(new_socket);
 
                 if (ret) {
                     send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
-                    
+
                     printf("Tar File Created and Sent\n");
                 } else {
                     printf("Error Creating Tar File\n");
@@ -653,14 +653,14 @@ void crequest(int new_socket) {
                 send(new_socket, message, strlen(message), 0);
                 memset(message, 0, MAX_RESPONSE_LENGTH);
                 send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
-                
+
             } else {
                 // Create Tar File and Send
                 int ret = create_tar_and_send(new_socket);
 
                 if (ret) {
                     send(new_socket, COMPLETE_MESSAGE, strlen(COMPLETE_MESSAGE), 0);
-                    
+
                     printf("Tar File Created and Sent\n");
                 } else {
                     printf("Error Creating Tar File\n");
